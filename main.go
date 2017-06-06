@@ -1,16 +1,26 @@
 package main
 
 import (
-	"fmt"
+	"net/http"
 
-	"github.com/exced/simple-blockchain/core"
+	"github.com/gorilla/websocket"
 )
 
+var clients = make(map[*websocket.Conn]bool) // connected clients
+var broadcast = make(chan Response)          // broadcast channel
+
+// Response defines our message object
+type Response struct {
+	Data string `json:"data"`
+}
+
+// Configure the upgrader
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
 func main() {
-	blockchain := core.NewBlockchain()
-	fmt.Println((*blockchain)[0])
-	blockchain.AddBlock("hey")
-	fmt.Println((*blockchain)[1])
-	fmt.Println(*blockchain)
-	fmt.Println("is valid: %#v ", blockchain.IsValid())
+
 }
