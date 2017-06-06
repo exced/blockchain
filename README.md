@@ -1,3 +1,3 @@
-# Chat Blockchain
+# Blockchain introduction
 
-This blockchain seals client messages forever.
+

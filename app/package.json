@@ -1,19 +1,18 @@
 {
-  "name": "app",
+  "name": "electron-quick-start",
   "version": "1.0.0",
-  "description": "chat app",
-  "main": "index.js",
+  "description": "A minimal Electron application",
+  "main": "main.js",
   "scripts": {
-    "prepare": "cp -a public/. dist",
-    "electron": "npm run prepare && electron dist",
-    "package": "npm run build && npm run prepare && ./node_modules/electron-packager/cli.js dist App --platform=darwin --arch=all --out=dist-app --overwrite",
-    "package-windows": "npm run build && npm run prepare && ./node_modules/electron-packager/cli.js dist App --platform=win32 --arch=all --out=dist-app --overwrite",
-    "package-all": "npm run build && npm run prepare && ./node_modules/electron-packager/cli.js dist App --platform=all --arch=all --out=dist-app --overwrite"
+    "start": "electron ."
   },
-  "author": "exced",
-  "license": "MIT",
+  "repository": "https://github.com/electron/electron-quick-start",
+  "author": "GitHub",
+  "license": "CC0-1.0",
+  "devDependencies": {
+    "electron": "~1.6.2"
+  },
   "dependencies": {
-    "electron": "^1.6.10",
-    "electron-packager": "^8.7.0"
+    "electron-packager": "^8.7.1"
   }
 }
