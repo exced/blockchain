@@ -5,21 +5,23 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/exced/simple-blockchain/core"
 	"github.com/gorilla/websocket"
 )
 
-var (
-	blockchain *core.Blockchain         // blockchain
-	peers      map[*websocket.Conn]bool // connected peers
-	broadcast  chan PeerMessage         // broadcast channel
-	upgrader   websocket.Upgrader
-)
+var clients = make(map[*websocket.Conn]bool) // connected clients
+var broadcast = make(chan PeerMessage)       // broadcast channel
 
 // PeerMessage defines our peer message object
 type PeerMessage struct {
 	Block string `json:"block"`
 	State string `json:"state"`
+}
+
+// Configure the upgrader
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -30,8 +32,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	// Register our new peer
-	peers[ws] = true
+	// Register our new client
+	clients[ws] = true
 
 	for {
 		var msg PeerMessage
@@ -39,7 +41,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		err := ws.ReadJSON(&msg)
 		if err != nil {
 			log.Printf("error: %v", err)
-			delete(peers, ws)
+			delete(clients, ws)
 			break
 		}
 		// Send the newly received message to the broadcast channel
@@ -50,25 +52,39 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 func handleMessages() {
 	for {
 		msg := <-broadcast
-		for peer := range peers {
-			err := peer.WriteJSON(msg)
+		for client := range clients {
+			err := client.WriteJSON(msg)
 			if err != nil {
 				log.Printf("error: %v", err)
-				peer.Close()
-				delete(peers, peer)
+				client.Close()
+				delete(clients, client)
 			}
 		}
 	}
 }
 
+// handleDeposit add deposit transaction to current pendings transactions
+func handleDeposit(w http.ResponseWriter, r *http.Request) {
+
+}
+
+// handleWithdraw add withdraw transaction to current pendings transactions
+func handleWithdraw(w http.ResponseWriter, r *http.Request) {
+
+}
+
 func main() {
-	blockchain = core.NewBlockchain()
-	httpAddr := flag.String("http", ":3000", "HTTP listen address")
-	p2pAddr := flag.String("p2p", ":6000", "p2p server address.")
+	httpAddr := flag.String("http", ":3001", "HTTP listen address")
+	// p2pAddr := flag.String("p2p", ":6001", "p2p server address.")
+	// initialPeers := flag.String("peers", "ws://localhost:6001", "initial peers")
 	flag.Parse()
 
 	// Configure websocket route
 	http.HandleFunc("/ws", handleConnections)
+
+	// handle
+	http.HandleFunc("/deposit", handleDeposit)
+	http.HandleFunc("/withdraw", handleWithdraw)
 
 	// Start listening for incoming peer messages
 	go handleMessages()
