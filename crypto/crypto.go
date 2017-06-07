@@ -14,3 +14,7 @@ func ToHash(str string) string {
 type Hasher interface {
 	ToHash() string
 }
+
+type Proof interface {
+	Match() bool
+}

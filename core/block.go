@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/exced/simple-blockchain/crypto"
@@ -13,7 +14,7 @@ type Block struct {
 	PreviousHash string `json:"previousHash"`
 	Timestamp    int64  `json:"timestamp"`
 	Data         string `json:"data"`
-	Nonce        int64  `json:"nonce"`
+	Nonce        int    `json:"nonce"`
 	Hash         string `json:"hash"`
 }
 
@@ -46,4 +47,11 @@ func (b *Block) genNext(data string) (nb *Block) {
 	}
 	nb.Hash = nb.ToHash()
 	return nb
+}
+
+func (b *Block) NextBlock(p *crypto.PoW) *Block {
+	for b.Nonce = rand.Intn(10000); !p.MatchHash(b.ToHash()); {
+
+	}
+	return b
 }

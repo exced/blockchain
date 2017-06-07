@@ -1,82 +1,41 @@
 package main
 
 import (
-	"flag"
-	"log"
 	"net/http"
 
-	"github.com/exced/simple-blockchain/core"
-	"github.com/gorilla/websocket"
+	"github.com/gorilla/mux"
+
+	"gopkg.in/mgo.v2"
+
+	"github.com/exced/simple-blockchain/backend/model"
 )
 
 var (
-	blockchain *core.Blockchain         // blockchain
-	peers      map[*websocket.Conn]bool // connected peers
-	broadcast  chan PeerMessage         // broadcast channel
-	upgrader   websocket.Upgrader
+	Database *mgo.Database
 )
 
-// PeerMessage defines our peer message object
-type PeerMessage struct {
-	Block string `json:"block"`
-	State string `json:"state"`
-}
+func WithDB(h http.Handler, storage api.Storage) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-func handleConnections(w http.ResponseWriter, r *http.Request) {
-	// Upgrade initial GET request to a websocket
-	ws, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer ws.Close()
+		h.ServeHTTP(w, r)
 
-	// Register our new peer
-	peers[ws] = true
-
-	for {
-		var msg PeerMessage
-		// Read in a new message as JSON and map it to a Message object
-		err := ws.ReadJSON(&msg)
-		if err != nil {
-			log.Printf("error: %v", err)
-			delete(peers, ws)
-			break
-		}
-		// Send the newly received message to the broadcast channel
-		broadcast <- msg
-	}
-}
-
-func handleMessages() {
-	for {
-		msg := <-broadcast
-		for peer := range peers {
-			err := peer.WriteJSON(msg)
-			if err != nil {
-				log.Printf("error: %v", err)
-				peer.Close()
-				delete(peers, peer)
-			}
-		}
-	}
+	})
 }
 
 func main() {
-	blockchain = core.NewBlockchain()
-	httpAddr := flag.String("http", ":3000", "HTTP listen address")
-	p2pAddr := flag.String("p2p", ":6000", "p2p server address.")
-	flag.Parse()
 
-	// Configure websocket route
-	http.HandleFunc("/ws", handleConnections)
-
-	// Start listening for incoming peer messages
-	go handleMessages()
-
-	// http serve
-	log.Println("http server started on", *httpAddr)
-	err := http.ListenAndServe(*httpAddr, nil)
+	session, err = mgo.Dial("mongodb://localhost/simple-blockchain")
 	if err != nil {
-		log.Fatal("Could not serve http: ", err)
+		panic(err)
 	}
+	defer session.Close()
+
+	// user storage
+	userStorage := model.NewMgoUserStorage(session)
+
+	r := mux.NewRouter()
+	r.HandleFunc("/user", GetPeopleEndpoint).Methods("GET")
+	r.HandleFunc("/user/{id}", GetPersonEndpoint).Methods("GET")
+	r.HandleFunc("/user/{id}", CreatePersonEndpoint).Methods("POST")
+	r.HandleFunc("/user/{id}", DeletePersonEndpoint).Methods("DELETE")
 }

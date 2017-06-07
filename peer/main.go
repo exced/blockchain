@@ -1,29 +1,55 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
 
+	"github.com/exced/simple-blockchain/core"
 	"github.com/gorilla/websocket"
 )
 
-var clients = make(map[*websocket.Conn]bool) // connected clients
-var broadcast = make(chan PeerMessage)       // broadcast channel
+var (
+	blockchain   *core.Blockchain     // blockchain
+	transactions []*core.Transaction  // pending transactions
+	consensus    *consensus.Consensus // consensus
+	upgrader     websocket.Upgrader
+)
 
-// PeerMessage defines our peer message object
-type PeerMessage struct {
-	Block string `json:"block"`
-	State string `json:"state"`
+// PeerConnection defines our peer connection message object
+type PeerConnection struct {
+	Conn   *websocket.Conn `json:"conn"`   // ws connection
+	Status bool            `json:"status"` // connect: true, disconnect: false
 }
 
-// Configure the upgrader
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+func main() {
+	httpAddr := flag.String("http", ":3000", "HTTP listen address")
+	p2pAddr := flag.String("p2p", ":6000", "P2P listen address")
+	flag.Parse()
+
+	// fetch blockchain
+	// take local saved blockchain
+	blockchain = core.NewBlockchain()
+	blockchain = consensus.Fetch(blockchain)
+
+	// HTTP API
+	// Configure websocket route
+	http.HandleFunc("/ws", handleConnections)
+
+	// Client Logic
+	http.HandleFunc("/deposit", handleDeposit)
+	http.HandleFunc("/withdraw", handleWithdraw)
+
+	// http serve
+	log.Println("http server started on", *httpAddr)
+	err := http.ListenAndServe(*httpAddr, nil)
+	if err != nil {
+		log.Fatal("Could not serve http: ", err)
+	}
 }
 
+// handleConnections broadcast newly connected or disconnected peer to peers
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// Upgrade initial GET request to a websocket
 	ws, err := upgrader.Upgrade(w, r, nil)
@@ -32,67 +58,49 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	// Register our new client
-	clients[ws] = true
+	// Register our new peer
+	peers[ws] = true
 
-	for {
-		var msg PeerMessage
-		// Read in a new message as JSON and map it to a Message object
-		err := ws.ReadJSON(&msg)
+	msg := &PeerConnection{
+		Conn:   ws,
+		Status: true,
+	}
+
+	// Send it out to every peer that is currently connected
+	for peer := range peers {
+		err := peer.WriteJSON(msg)
 		if err != nil {
 			log.Printf("error: %v", err)
-			delete(clients, ws)
-			break
-		}
-		// Send the newly received message to the broadcast channel
-		broadcast <- msg
-	}
-}
-
-func handleMessages() {
-	for {
-		msg := <-broadcast
-		for client := range clients {
-			err := client.WriteJSON(msg)
-			if err != nil {
-				log.Printf("error: %v", err)
-				client.Close()
-				delete(clients, client)
-			}
+			peer.Close()
+			delete(peers, peer)
 		}
 	}
 }
 
-// handleDeposit add deposit transaction to current pendings transactions
 func handleDeposit(w http.ResponseWriter, r *http.Request) {
+	// decode transaction
+	decoder := json.NewDecoder(r.Body)
+	var t core.Transaction
+	err := decoder.Decode(&t)
 
-}
-
-// handleWithdraw add withdraw transaction to current pendings transactions
-func handleWithdraw(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func main() {
-	httpAddr := flag.String("http", ":3001", "HTTP listen address")
-	// p2pAddr := flag.String("p2p", ":6001", "p2p server address.")
-	// initialPeers := flag.String("peers", "ws://localhost:6001", "initial peers")
-	flag.Parse()
-
-	// Configure websocket route
-	http.HandleFunc("/ws", handleConnections)
-
-	// handle
-	http.HandleFunc("/deposit", handleDeposit)
-	http.HandleFunc("/withdraw", handleWithdraw)
-
-	// Start listening for incoming peer messages
-	go handleMessages()
-
-	// http serve
-	log.Println("http server started on", *httpAddr)
-	err := http.ListenAndServe(*httpAddr, nil)
 	if err != nil {
-		log.Fatal("Could not serve http: ", err)
+		panic(err)
 	}
+
+	// add transaction to pending
+	transactions = append(transactions, &t)
+}
+
+func handleWithdraw(w http.ResponseWriter, r *http.Request) {
+	// decode transaction
+	decoder := json.NewDecoder(r.Body)
+	var t core.Transaction
+	err := decoder.Decode(&t)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// add transaction to pending
+	transactions = append(transactions, &t)
 }
