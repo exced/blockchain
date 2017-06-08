@@ -9,8 +9,8 @@ import (
 // User represents a user of our blockchain.
 type User struct {
 	Key      string `json:"key"`
-	Password []byte
-	Wallet   Wallet `json:"wallet"`
+	Password string `json:"password"`
+	Wallet   Wallet
 }
 
 // MgoUserStorage uses mongoDB to store data.
@@ -23,13 +23,23 @@ func NewMgoUserStorage(s *mgo.Session) *MgoUserStorage {
 	return &MgoUserStorage{s.DB("store").C("user")}
 }
 
+// Auth validates user ID && password
+func (db *MgoUserStorage) Auth(user *User) (*User, error) {
+	res := User{}
+	err := db.c.Find(bson.M{"Key": user.Key}).One(&res)
+	if err = bcrypt.CompareHashAndPassword([]byte(res.Password), []byte(user.Password)); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // Create CRUD create resource
 func (db *MgoUserStorage) Create(user *User) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	user.Password = hash
+	user.Password = string(hash)
 	return db.c.Insert(user)
 }
 
@@ -37,10 +47,7 @@ func (db *MgoUserStorage) Create(user *User) error {
 func (db *MgoUserStorage) Read(user *User) (*User, error) {
 	res := User{}
 	err := db.c.Find(bson.M{"Key": user.Key}).One(&res)
-	if err = bcrypt.CompareHashAndPassword(res.Password, []byte(user.Password)); err != nil {
-		return nil, err
-	}
-	return &res, nil
+	return &res, err
 }
 
 // Update CRUD update resource

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"flag"
+	"log"
+	"net/http"
+
 	"github.com/gorilla/mux"
 
 	"gopkg.in/mgo.v2"
@@ -9,15 +13,19 @@ import (
 )
 
 func main() {
+	httpAddr := flag.String("http", ":3000", "HTTP listen address")
+	dbAddr := flag.String("db", "mongodb://localhost/blockchain", "DB listen address")
+	flag.Parse()
 
-	session, err := mgo.Dial("mongodb://localhost/simple-blockchain")
+	// MongoDB Dial
+	session, err := mgo.Dial(*dbAddr)
 	if err != nil {
 		panic(err)
 	}
 	defer session.Close()
 
 	// user storage and user API
-	userAPI := api.userAPI(session)
+	userAPI := api.NewUserAPI(session)
 
 	// routes
 	r := mux.NewRouter()
@@ -27,4 +35,11 @@ func main() {
 	r.HandleFunc("/user/{id}", userAPI.PostUser).Methods("POST")
 	r.HandleFunc("/user/{id}", userAPI.PostUser).Methods("PUT")
 	r.HandleFunc("/user/{id}", userAPI.DeleteUser).Methods("DELETE")
+
+	// http serve
+	log.Println("http server started on", *httpAddr)
+	err = http.ListenAndServe(*httpAddr, r)
+	if err != nil {
+		log.Fatal("Could not serve http: ", err)
+	}
 }
