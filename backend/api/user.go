@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/exced/simple-blockchain/backend/model"
+	"github.com/exced/blockchain/backend/model"
 	"github.com/gorilla/mux"
 	mgo "gopkg.in/mgo.v2"
 )

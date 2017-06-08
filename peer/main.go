@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/exced/simple-blockchain/core"
+	"github.com/exced/blockchain/core"
 	"github.com/gorilla/websocket"
 )
 

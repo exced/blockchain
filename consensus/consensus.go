@@ -1,8 +1,8 @@
 package consensus
 
 import (
-	"github.com/exced/simple-blockchain/core"
-	"github.com/exced/simple-blockchain/peer"
+	"github.com/exced/blockchain/core"
+	"github.com/exced/blockchain/peer"
 )
 
 // Consensus represents a set of peers which work together to build a valid blockchain.

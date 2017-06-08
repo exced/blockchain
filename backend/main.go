@@ -5,7 +5,7 @@ import (
 
 	"gopkg.in/mgo.v2"
 
-	"github.com/exced/simple-blockchain/backend/api"
+	"github.com/exced/blockchain/backend/api"
 )
 
 func main() {

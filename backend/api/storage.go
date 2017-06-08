@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/exced/simple-blockchain/backend/model"
+	"github.com/exced/blockchain/backend/model"
 )
 
 func WithStorage(h http.Handler, s model.Storage) http.Handler {

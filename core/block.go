@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/exced/simple-blockchain/crypto"
+	"github.com/exced/blockchain/crypto"
 )
 
 // Block is the basic component of a blockchain.
