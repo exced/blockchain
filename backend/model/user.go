@@ -10,14 +10,7 @@ import (
 type User struct {
 	Key      string `json:"key"`
 	Password []byte
-}
-
-// UserStorage defines a CRUD API to access our user resource.
-type UserStorage interface {
-	Create(user *User) error
-	Read(user *User) (*User, error)
-	Update(o *User, n *User) error
-	Delete(user *User) error
+	Wallet   Wallet `json:"wallet"`
 }
 
 // MgoUserStorage uses mongoDB to store data.
@@ -30,6 +23,7 @@ func NewMgoUserStorage(s *mgo.Session) *MgoUserStorage {
 	return &MgoUserStorage{s.DB("store").C("user")}
 }
 
+// Create CRUD create resource
 func (db *MgoUserStorage) Create(user *User) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -39,6 +33,7 @@ func (db *MgoUserStorage) Create(user *User) error {
 	return db.c.Insert(user)
 }
 
+// Read CRUD read resource
 func (db *MgoUserStorage) Read(user *User) (*User, error) {
 	res := User{}
 	err := db.c.Find(bson.M{"Key": user.Key}).One(&res)
@@ -48,10 +43,12 @@ func (db *MgoUserStorage) Read(user *User) (*User, error) {
 	return &res, nil
 }
 
+// Update CRUD update resource
 func (db *MgoUserStorage) Update(o *User, n *User) error {
 	return db.c.Update(o, n)
 }
 
+// Delete CRUD delete resource
 func (db *MgoUserStorage) Delete(user *User) error {
 	return db.c.Remove(user)
 }
