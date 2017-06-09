@@ -10,7 +10,7 @@ import (
 type User struct {
 	Key      string `json:"key"`
 	Password string `json:"password"`
-	Wallet   Wallet
+	Wallet   Wallet `json:"wallet"`
 }
 
 // MgoUserStorage uses mongoDB to store data.

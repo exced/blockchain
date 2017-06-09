@@ -9,3 +9,6 @@ withdraw:
 
 signin:
 	curl -X POST -d '{"key": "admin", "password": "admin"}' http://localhost:3000/signin
+
+login:
+	curl -X POST -d '{"key": "admin", "password": "admin"}' http://localhost:3000/login

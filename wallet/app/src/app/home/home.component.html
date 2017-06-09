@@ -1,0 +1,35 @@
+<div class="navbar navbar-fixed-top navbar-default" role="navigation">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="#">Wallet</a>
+        </div>
+        <!-- /.nav-collapse -->
+    </div>
+    <!-- /.container -->
+</div>
+<!-- /.navbar -->
+
+<div class="container-fluid">
+    <div class="jumbotron pad-top">
+        <div class="row center">
+            <div class="col-xs-3">
+                <button [disabled]="loading" class="btn btn-primary">Deposit</button>
+            </div>
+            <div class="col-xs-3">
+                <button [disabled]="loading" class="btn btn-primary">Withdraw</button>
+            </div>
+        </div>
+        <div *ngFor="let value of values" class="row center">
+            <div class="col-xs-3">
+                <h2> {{value.currency}} :</h2>
+            </div>
+            <div class="col-xs-3">
+                <h2> {{value.value}} </h2>
+            </div>
+        </div>
+    </div>
+</div>
+<!--/.container-->
