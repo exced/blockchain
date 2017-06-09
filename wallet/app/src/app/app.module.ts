@@ -7,6 +7,8 @@ import { HttpModule } from '@angular/http';
 import { AppRoutingModule } from './app-routing.module';
 import { AuthGuard } from '../guards/auth.guard';
 import { AppSettingsService } from './app.settings.service';
+import { AuthService } from '../services/auth.service';
+import { AlertService } from '../services/alert.service';
 
 import { AppComponent } from './app.component';
 import { HomeComponent } from './home/home.component';

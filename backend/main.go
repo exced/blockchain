@@ -88,4 +88,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			delete(peers, peer)
 		}
 	}
+
+	// send Consensus to current logged in user
+
 }

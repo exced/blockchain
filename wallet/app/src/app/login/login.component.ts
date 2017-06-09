@@ -1,30 +1,38 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { AppSettingsService } from '../app.settings.service';
+import { AlertService } from '../../services/alert.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
-    selector: 'app-login',
-    templateUrl: './login.component.html',
-    styleUrls: ['./login.component.css']
+    moduleId: module.id,
+    templateUrl: 'login.component.html'
 })
 
 export class LoginComponent implements OnInit {
-    private model: any = {};
-    private loading = false;
-    private error = '';
+    model: any = {};
+    loading = false;
+    returnUrl: string;
 
     constructor(
         private router: Router,
-        private appSettingsService: AppSettingsService,
-    ) {
-
-    }
+        private authService: AuthService,
+        private alertService: AlertService) { }
 
     ngOnInit() {
-
+        // reset login status
+        this.authService.logout();
     }
 
     login() {
         this.loading = true;
+        this.authService.login(this.model.username, this.model.password)
+            .subscribe(
+            data => {
+                this.router.navigate([this.returnUrl]);
+            },
+            error => {
+                this.alertService.error(error);
+                this.loading = false;
+            });
     }
 }

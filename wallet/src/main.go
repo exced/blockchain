@@ -17,12 +17,6 @@ var (
 	upgrader     websocket.Upgrader
 )
 
-// PeerConnection defines our peer connection message object
-type PeerConnection struct {
-	Conn   *websocket.Conn `json:"conn"`   // ws connection
-	Status bool            `json:"status"` // connect: true, disconnect: false
-}
-
 func main() {
 	httpAddr := flag.String("http", ":3000", "HTTP listen address")
 	p2pAddr := flag.String("p2p", ":6000", "P2P listen address")
