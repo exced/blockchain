@@ -19,6 +19,6 @@ func (t *Transaction) Cipher(privateKey *rsa.PrivateKey) string {
 
 }
 
-func (t *Transaction) Decipher() string {
+func (t *Transaction) Decipher(publicKey *rsa.PublicKey) string {
 
 }

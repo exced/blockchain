@@ -33,10 +33,6 @@ func main() {
 	// Handle peers
 	http.HandleFunc("/ws", consensusAPI.handlePeerConnection)
 
-	// Handle cli
-	http.HandleFunc("/withdraw", WithConsensus(handleWithdraw, consensusAPI))
-	http.HandleFunc("/deposit", WithConsensus(handleDeposit, consensusAPI))
-
 	// http serve
 	log.Println("http server started on", *httpAddr)
 	err := http.ListenAndServe(*httpAddr, nil)

@@ -1,24 +1,23 @@
 package core
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"math/rand"
 	"time"
-
-	"crypto/rsa"
 
 	"github.com/exced/blockchain/crypto"
 )
 
 // Block is the basic component of a blockchain.
 type Block struct {
-	Index        int64                           `json:"index"`
-	PreviousHash string                          `json:"previousHash"`
-	Timestamp    int64                           `json:"timestamp"`
-	Data         string                          `json:"data"`
-	Transactions map[*rsa.PublicKey]*Transaction `json:"transactions"`
-	Nonce        int                             `json:"nonce"`
-	Hash         string                          `json:"hash"`
+	Index        int64          `json:"index"`
+	PreviousHash string         `json:"previousHash"`
+	Timestamp    int64          `json:"timestamp"`
+	Data         string         `json:"data"`
+	Transactions []*Transaction `json:"transactions"`
+	Nonce        int            `json:"nonce"`
+	Hash         string         `json:"hash"`
 }
 
 var genesisBlock = &Block{
@@ -32,7 +31,7 @@ var genesisBlock = &Block{
 
 // ToHash hashes receiver block.
 func (b *Block) ToHash() string {
-	return crypto.ToHash(fmt.Sprintf("%d%s%d%s", b.Index, b.PreviousHash, b.Timestamp, b.Data))
+	return crypto.ToHash(fmt.Sprintf("%d%s%d%s%v%d", b.Index, b.PreviousHash, b.Timestamp, b.Data, b.Transactions, b.Nonce))
 }
 
 // isValid retrieves the cryptographic validity between receiver block and given previous block.
@@ -52,6 +51,7 @@ func (b *Block) genNext(data string) (nb *Block) {
 	return nb
 }
 
+// NextBlock looks for a nonce to satisfy given PoW
 func (b *Block) NextBlock(p *crypto.PoW) *Block {
 	for b.Nonce = rand.Intn(10000); !p.MatchHash(b.ToHash()); {
 
@@ -59,8 +59,28 @@ func (b *Block) NextBlock(p *crypto.PoW) *Block {
 	return b
 }
 
-func (b *Block) areTransactionsValid() bool {
+// areTransactionsValid tests if given transactions are valid with current transactions chain
+func (b *Block) areTransactionsValid(transactions []*Transaction) bool {
+	balances := make(map[string]int64) // key - amount
 	for _, t := range b.Transactions {
-
+		balances[t.From] -= t.Amount
+		balances[t.To] += t.Amount
 	}
+	for _, t := range transactions {
+		balances[t.From] -= t.Amount
+		if balances[t.From] < 0 {
+			return false
+		}
+		balances[t.To] += t.Amount
+	}
+	return true
 }
+
+func verify(sig, hash []byte, publicKey *rsa.PublicKey) error {
+	return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hash, sig)
+}
+
+	err = verify(sig, hash.Sum(nil), rsaPublicKey)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
