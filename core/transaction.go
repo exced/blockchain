@@ -15,10 +15,6 @@ func NewTransaction(from, to string, a int64) *Transaction {
 	return &Transaction{from, to, a}
 }
 
-func (t *Transaction) Cipher(privateKey *rsa.PrivateKey) string {
-
-}
-
-func (t *Transaction) Decipher(publicKey *rsa.PublicKey) string {
+func (t *Transaction) Verify(publicKey *rsa.PublicKey) string {
 
 }

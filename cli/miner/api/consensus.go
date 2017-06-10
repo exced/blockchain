@@ -17,7 +17,7 @@ func NewConsensusAPI() *ConsensusAPI {
 }
 
 // handlePeerConnection broadcast newly connected or disconnected peer to peers
-func handlePeerConnection(w http.ResponseWriter, r *http.Request) {
+func (api *ConsensusAPI) handlePeerConnection(w http.ResponseWriter, r *http.Request) {
 	// Upgrade initial GET request to a websocket
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {

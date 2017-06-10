@@ -13,7 +13,7 @@ type ConsensusAPI struct {
 }
 
 func NewConsensusAPI() *ConsensusAPI {
-	return &ConsensusAPI{consensus: &consensus{make(map[*Peer]bool)}}
+	return &ConsensusAPI{consensus: &consensus{Peers: make(map[*Peer]bool), PoW: }}
 }
 
 func (api *ConsensusAPI) Connect(addr string) {
@@ -27,6 +27,7 @@ func (api *ConsensusAPI) Connect(addr string) {
 
 // Consensus represents a set of peers which work together to build a valid blockchain.
 type consensus struct {
+	PoW   *pow.P         `json:"pow"`   // Proof of Work
 	Peers map[*Peer]bool `json:"peers"` // connected peers
 }
 
