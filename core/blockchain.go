@@ -16,6 +16,10 @@ func (bc *Blockchain) getLastBlock() *Block {
 	return (*bc)[bc.Len()-1]
 }
 
+func (bc *Blockchain) getGenesis() *Block {
+	return (*bc)[0]
+}
+
 // AddBlock add a new block at the end of the blockchain
 func (bc *Blockchain) AddBlock(data string) {
 	nb := bc.getLastBlock().genNext(data)

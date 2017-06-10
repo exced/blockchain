@@ -6,9 +6,13 @@ import (
 )
 
 type PoW struct {
-	Difficulty int
-	HashRate   int
+	Difficulty int // number of first 0 recquired
+	HashRate   int // time in seconds
 }
+
+var (
+	initPoW = &PoW{Difficulty: 4, HashRate: 5000}
+)
 
 func NewPoW(difficulty, hashrate int) *PoW {
 	return &PoW{Difficulty: difficulty, HashRate: hashrate}

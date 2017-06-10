@@ -5,17 +5,20 @@ import (
 	"math/rand"
 	"time"
 
+	"crypto/rsa"
+
 	"github.com/exced/blockchain/crypto"
 )
 
 // Block is the basic component of a blockchain.
 type Block struct {
-	Index        int64  `json:"index"`
-	PreviousHash string `json:"previousHash"`
-	Timestamp    int64  `json:"timestamp"`
-	Data         string `json:"data"`
-	Nonce        int    `json:"nonce"`
-	Hash         string `json:"hash"`
+	Index        int64                           `json:"index"`
+	PreviousHash string                          `json:"previousHash"`
+	Timestamp    int64                           `json:"timestamp"`
+	Data         string                          `json:"data"`
+	Transactions map[*rsa.PublicKey]*Transaction `json:"transactions"`
+	Nonce        int                             `json:"nonce"`
+	Hash         string                          `json:"hash"`
 }
 
 var genesisBlock = &Block{
@@ -54,4 +57,10 @@ func (b *Block) NextBlock(p *crypto.PoW) *Block {
 
 	}
 	return b
+}
+
+func (b *Block) areTransactionsValid() bool {
+	for _, t := range b.Transactions {
+
+	}
 }
