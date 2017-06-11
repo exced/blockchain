@@ -6,6 +6,4 @@ gen:
 
 send:
 	go run main.go send key amount
-
-mine:
-	go run main.go mine
+	

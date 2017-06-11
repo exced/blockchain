@@ -6,6 +6,9 @@
 /out-tsc
 /dist-app
 
+# RSA keys
+*.pem
+
 # dependencies
 /node_modules
 /backend/node_modules

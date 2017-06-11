@@ -38,7 +38,8 @@ func OpenRsaFile(path string) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return x509.ParsePKCS1PrivateKey(f)
+	block, _ := pem.Decode(f)
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
 
 func GetBytes(key interface{}) ([]byte, error) {
