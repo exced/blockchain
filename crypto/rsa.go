@@ -15,6 +15,10 @@ func Sign(hash []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
 	return rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash)
 }
 
+func Verify(sig, hash []byte, publicKey *rsa.PublicKey) error {
+	return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hash, sig)
+}
+
 // GenRsaFile generate RSA Private Key and store it in a file
 func GenRsaFile(path string) error {
 	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)

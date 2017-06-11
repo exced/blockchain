@@ -1,7 +1,6 @@
 package core
 
 import (
-	"crypto/rsa"
 	"fmt"
 	"math/rand"
 	"time"
@@ -51,10 +50,10 @@ func (b *Block) genNext(data string) (nb *Block) {
 	return nb
 }
 
-// NextBlock looks for a nonce to satisfy given PoW
-func (b *Block) NextBlock(p *crypto.PoW) *Block {
-	for b.Nonce = rand.Intn(10000); !p.MatchHash(b.ToHash()); {
-
+// Mine looks for a nonce to satisfy given difficulty
+func (b *Block) Mine(difficulty int) *Block {
+	for !MatchHash(b.ToHash(), difficulty) {
+		b.Nonce = rand.Intn(10000)
 	}
 	return b
 }
@@ -75,12 +74,3 @@ func (b *Block) areTransactionsValid(transactions []*Transaction) bool {
 	}
 	return true
 }
-
-func verify(sig, hash []byte, publicKey *rsa.PublicKey) error {
-	return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hash, sig)
-}
-
-	err = verify(sig, hash.Sum(nil), rsaPublicKey)
-	if err != nil {
-		log.Fatal(err.Error())
-	}

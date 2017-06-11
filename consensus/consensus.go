@@ -1,67 +1,92 @@
 package consensus
 
 import (
-	"log"
+	"encoding/json"
+	"time"
 
 	"golang.org/x/net/websocket"
 
 	"github.com/exced/blockchain/core"
 )
 
-type ConsensusAPI struct {
-	consensus *consensus
+// Consensus represents a set of peers which work together to build a valid blockchain.
+type Consensus struct {
+	Tick       time.Time                `json:"tick"`       // time of next tick
+	HashRate   time.Duration            `json:"hashrate"`   // hashrate duration
+	Difficulty int                      `json:"difficulty"` // number of 0 required at the beginning of the hash : Proof of Work
+	Blockchain *Blockchain              `json:"blockchain"` // latest blockchain
+	Peers      map[*websocket.Conn]bool `json:"peers"`      // connected peers
 }
 
-func NewConsensusAPI() *ConsensusAPI {
-	return &ConsensusAPI{consensus: &consensus{Peers: make(map[*Peer]bool), PoW: }}
+// NewConsensus returns new consensus
+func NewConsensus() *Consensus {
+	return &Consensus{}
 }
 
-func (api *ConsensusAPI) Connect(addr string) {
+// PeerConnectionMessage is a message sent when a peer has connected
+type PeerConnectionMessage struct {
+	Conn *websocket.Conn `json:"conn"`
+}
+
+// Connect connects to peer address and await for its consensus response
+func Connect(addr string) (*Consensus, error) {
 	ws, err := websocket.Dial(addr, "", addr)
 	if err != nil {
-		log.Println("dial to peer", err)
-		continue
+		return nil, err
 	}
-	initConnection(ws)
-}
-
-// Consensus represents a set of peers which work together to build a valid blockchain.
-type consensus struct {
-	PoW   *pow.P         `json:"pow"`   // Proof of Work
-	Peers map[*Peer]bool `json:"peers"` // connected peers
-}
-
-func initConnection(ws *websocket.Conn) {
-	ws.Write(FetchMsg())
-	go wsHandleP2P(ws)
-}
-
-func (c *Consensus) Register(conn *websocket.Conn, key string) {
-	p := NewPeer(conn, key)
-	c.Peers[p] = true
-
-	msg := &PeerConnection{
-		Peer:   p,
-		Status: true,
+	// get other peer consensus
+	var c = &Consensus{}
+	var msg []byte
+	err := websocket.Message.Receive(ws, &msg)
+	if err != nil {
+		return nil, err
 	}
+	err = json.Unmarshal(msg, c)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
 
-	// Send it out to every peer that is currently connected
-	for peer := range c.Peers {
-		err := peer.Conn.WriteJSON(msg)
-		if err != nil {
-			log.Printf("error: %v", err)
-			peer.Conn.Close()
-			delete(c.Peers, peer)
+// HandlePeerConnection sends Consensus to newly connected peer
+func (c *Consensus) HandlePeerConnection(ws *websocket.Conn) error {
+	consensus, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	ws.Write(consensus)
+	msg := &PeerConnectionMessage{ws}
+	// Broadcast New Peer
+	for peer := range peers {
+		peer.Conn.WriteJSON(msg)
+	}
+	return nil
+}
+
+func (c *Consensus) ListenAndServe() {
+	var b *Block
+	for {
+		for x := range time.Tick(time.Until(c.Tick)) {
+			b = Mine()
+			if MatchHash()
 		}
+		// Broadcast Mined Block
+		for peer := range peers {
+			peer.Conn.WriteJSON(msg)
+		}
+		blocks, err := c.Synchronize()
+		c.Validate(blocks)
+		c.Tick += c.HashRate
 	}
-}
-
-// Broadcast given data to other peers
-func (c *Consensus) Broadcast(self Peer, data interface{}) {
 
 }
 
 // Validate block
 func (c *Consensus) Validate(b *core.Block) bool {
 	return false
+}
+
+// Mine mines block
+func (c *Consensus) Mine() *Block {
+
 }
