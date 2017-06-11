@@ -18,5 +18,5 @@ func NewTransaction(from, to string, a int64) *Transaction {
 }
 
 func (t *Transaction) Verify(sig, hash []byte, rsaPublicKey *rsa.PublicKey) error {
-	return crypto.Verify(sig, hash.Sum(nil), rsaPublicKey)
+	return crypto.Verify(sig, hash, rsaPublicKey)
 }

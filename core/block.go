@@ -52,9 +52,7 @@ func (b *Block) genNext(data string) (nb *Block) {
 
 // Mine looks for a nonce to satisfy given difficulty
 func (b *Block) Mine(difficulty int) *Block {
-	for !MatchHash(b.ToHash(), difficulty) {
-		b.Nonce = rand.Intn(10000)
-	}
+	b.Nonce = rand.Intn(10000)
 	return b
 }
 

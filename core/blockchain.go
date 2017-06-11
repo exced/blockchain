@@ -14,7 +14,7 @@ func (bc *Blockchain) Save(file string) error {
 }
 
 // OpenBlockchainFile open blockchain file
-func OpenBlockchainFile(file string) (*Blockchain, error) {
+func OpenBlockchainFile(file string) error {
 	var blockchain = &Blockchain{}
 	return Load(file, blockchain)
 }
@@ -54,6 +54,6 @@ func (bc *Blockchain) IsValid() bool {
 }
 
 // Mine looks for a nonce for the last block of received blockchain to satisfy given difficulty
-func (bc *Blockchain) Mine(difficulty int) {
+func (bc *Blockchain) Mine(difficulty int) *Block {
 	return bc.getLastBlock().Mine(difficulty)
 }

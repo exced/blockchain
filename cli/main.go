@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
@@ -14,16 +13,17 @@ import (
 
 	"golang.org/x/net/websocket"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	pb "github.com/exced/blockchain/cli/api"
-	"github.com/exced/blockchain/core"
+	c "github.com/exced/blockchain/consensus"
 	"github.com/exced/blockchain/crypto"
 )
 
 var (
 	pendingTransactions []*Transaction
-	consensus           *consensus.Consensus
+	consensus           *c.Consensus
 )
 
 func main() {
@@ -48,28 +48,32 @@ func main() {
 			log.Fatal(err)
 		}
 
-		// blockchain
-		blockchain, err := core.OpenBlockchainFile(*blockchainFilePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		// Genesis Peer
 		if *p2pAddr == "genesis" {
-			consensus = consensus.NewConsensus()
+			consensus = c.NewConsensus()
 		} else {
-			// Get Consensus
-			consensus, err = consensus.Connect(*p2pAddr)
+			consensus, err = c.Connect(*p2pAddr)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
 
-		// Handle peers
+		// Handle peers connection
 		http.HandleFunc("/ws", websocket.Handler(consensus.HandlePeerConnection))
+		http.HandleFunc("/blockchain", handleBlockchain)
 
-		// Mine
+		// Serve Network
 		go consensus.ListenAndServe()
+
+		// mine
+		go func() {
+			b := c.Blockchain.Mine(c.Difficulty)
+			if crypto.MatchHash(b.ToHash(), c.Difficulty) {
+
+			}
+			// Broadcast Mined Block
+			// broadcast <- &Message{Type: BlockMessage, Message: &BlockMessage{Block: b}}
+		}()
 
 		// gRPC Server
 		log.Printf("listening to port %s", *rpcAddr)
@@ -77,7 +81,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("could not listen to port %s: %v", *rpcAddr, err)
 		}
-
 		s := grpc.NewServer()
 		pb.RegisterPeerServer(s, server{})
 		err = s.Serve(lis)
@@ -102,7 +105,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err.Error())
 		}
-		// gRPC
+		// gRPC Cli
 		conn, err := grpc.Dial(*rpcAddr, grpc.WithInsecure())
 		if err != nil {
 			log.Fatalf("could not connect to %s: %v", *rpcAddr, err)
@@ -143,10 +146,14 @@ func main() {
 	}
 }
 
+func handleBlockchain(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(consensus.Blockchain)
+}
+
 type server struct{}
 
 func (server) Send(ctx context.Context, t *pb.TransactionMessage) (*pb.Response, error) {
-	
+
 	pendingTransactions = append(pendingTransactions, t)
 	consensus.Broadcast()
 }
