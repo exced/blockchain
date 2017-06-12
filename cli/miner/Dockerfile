@@ -1,4 +1,4 @@
-FROM golang:1.8 as builder
+FROM golang:1.8
 ADD app /app
 
 EXPOSE 3000

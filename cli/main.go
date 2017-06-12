@@ -4,63 +4,55 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"strconv"
 
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-
-	pb "github.com/exced/blockchain/cli/api"
+	"github.com/exced/blockchain/consensus"
+	"github.com/exced/blockchain/core"
 	"github.com/exced/blockchain/crypto"
 )
 
 func main() {
-	rpcAddr := flag.String("http", "localhost:3000", "RPC address")
+	httpAddr := flag.String("http", ":3000", "HTTP listen address")
 	rsaFilePath := flag.String("r", "./private.pem", "RSA key file")
 	rsaGenFilePath := flag.String("o", "./private.pem", "RSA key generated file")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
-		log.Fatal("usage:\n\t send key amount \n\t gen")
+		log.Fatal("usage:\n\t send from to amount \n\t gen")
 	}
 
 	switch flag.Arg(0) {
 	case "gen":
 		crypto.GenRsaFile(*rsaGenFilePath)
 	case "send":
-		if flag.NArg() < 3 {
-			log.Fatal("usage:\n\t send key amount\n")
+		if flag.NArg() < 4 {
+			log.Fatal("usage:\n\t send from to amount\n")
 		}
 		// args
-		amount, err := strconv.ParseInt(flag.Arg(2), 10, 64)
+		amount, err := strconv.ParseInt(flag.Arg(3), 10, 64)
 		if err != nil {
 			log.Fatalf("given amount could not be parsed as int: %v: %v", amount, err)
 		}
-		send(*rsaFilePath, *rpcAddr, flag.Arg(1), amount)
+		send(*rsaFilePath, *httpAddr, flag.Arg(1), flag.Arg(2), amount)
 	default:
 		panic("command does not exist")
 	}
 }
 
 // send cryptocurrency
-func send(rsaFilePath, rpcAddr, to string, amount int64) {
+func send(rsaFilePath, rpcAddr, from, to string, amount int64) {
+
 	// rsa key
 	rsaPrivateKey, err := crypto.OpenRsaFile(rsaFilePath)
 	if err != nil {
 		log.Fatal("could not open rsa file", err)
 	}
-	// gRPC Cli
-	conn, err := grpc.Dial(rpcAddr, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("could not connect to %s: %v", rpcAddr, err)
-	}
-	defer conn.Close()
-	client := pb.NewPeerClient(conn)
+	rsaPublicKey := &rsaPrivateKey.PublicKey
 
 	// transaction
-	transaction := &pb.Transaction{To: to, Amount: amount}
+	transaction := &core.Transaction{From: *rsaPublicKey, To: to, Amount: amount}
 	transactionString, err := json.Marshal(transaction)
 	if err != nil {
 		log.Fatalf("could not marshal transaction: %#v: %v", transaction, err)
@@ -73,16 +65,11 @@ func send(rsaFilePath, rpcAddr, to string, amount int64) {
 		log.Fatalf("failed to sign hash %s: %v", hash.Sum(nil), err)
 	}
 
-	rsaPublicKeyBytes, err := crypto.GetBytes(&rsaPrivateKey.PublicKey)
+	rsaPublicKeyBytes, err := crypto.GetBytes(rsaPublicKey)
 	if err != nil {
-		log.Fatalf("failed to get bytes of %v : %v", &rsaPrivateKey.PublicKey, err)
+		log.Fatalf("failed to get bytes of %v : %v", rsaPublicKey, err)
 	}
-	transactionMessage := &pb.TransactionMessage{Signature: sig, Hash: hash.Sum(nil), Rsapublickey: rsaPublicKeyBytes}
+	transactionMessage := &consensus.TransactionMessage{Signature: sig, Hash: hash.Sum(nil), Rsapublickey: rsaPublicKeyBytes}
 
 	// send
-	res, err := client.Send(context.Background(), transactionMessage)
-	if err != nil {
-		log.Fatalf("could not send %d to %s: %v", amount, flag.Arg(0), err)
-	}
-	fmt.Println("RES ", res)
 }

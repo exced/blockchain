@@ -5,11 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	pb "github.com/exced/blockchain/cli/api"
 	c "github.com/exced/blockchain/consensus"
@@ -22,9 +18,10 @@ var (
 )
 
 func main() {
-	p2pAddr := flag.String("p2p", "6000", "P2P listen address")
-	rpcAddr := flag.String("http", "3000", "RPC address")
+	p2pPort := flag.Int("p2p", 6000, "P2P listen address")
+	httpPort := flag.Int("http", 8000, "HTTP port")
 	rsaFilePath := flag.String("r", "../private.pem", "RSA key file")
+	genesisMode := flag.Bool("g", false, "Genesis mode")
 	// blockchainFilePath := flag.String("b", "./blockchain", "Blockchain file")
 	flag.Parse()
 
@@ -37,21 +34,23 @@ func main() {
 	fmt.Println("rsapublickey ", rsaPublicKey)
 
 	// Genesis Peer
-	if *p2pAddr == "genesis" {
+	if *genesisMode {
 		consensus = c.NewConsensus()
 	} else {
-		consensus, err = c.Connect(*p2pAddr)
+		consensus, err = c.Connect(fmt.Sprintf("localhost:%d", *p2pPort))
 		if err != nil {
-			log.Fatalf("could not connect to consensus %s : %v", *p2pAddr, err)
+			log.Fatalf("could not connect to consensus %d : %v", *p2pPort, err)
 		}
 	}
 
 	// Handle peers connection
 	// http.HandleFunc("/ws", websocket.Handler(consensus.HandlePeerConnection))
 	http.HandleFunc("/blockchain", handleBlockchain)
+	log.Printf("HTTP listening to port %d", *httpPort)
+	http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil)
 
 	// Serve Network
-	go consensus.ListenAndServe()
+	// go consensus.ListenAndServe()
 
 	// mine
 	go func() {
@@ -62,29 +61,8 @@ func main() {
 		// Broadcast Mined Block
 		// broadcast <- &Message{Type: BlockMessage, Message: &BlockMessage{Block: b}}
 	}()
-
-	// gRPC Server
-	log.Printf("listening to port %s", *rpcAddr)
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", *rpcAddr))
-	if err != nil {
-		log.Fatalf("could not listen to port %s: %v", *rpcAddr, err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterPeerServer(s, server{})
-	err = s.Serve(lis)
-	if err != nil {
-		log.Fatalf("could not serve: %v", err)
-	}
 }
 
 func handleBlockchain(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(consensus.Blockchain)
-}
-
-type server struct{}
-
-func (server) Send(ctx context.Context, t *pb.TransactionMessage) (*pb.Response, error) {
-	fmt.Println("SEND ", *t)
-	pendingTransactions = append(pendingTransactions, t)
-	return &pb.Response{Success: true, Msg: "successfully added to pending transactions"}, nil
 }
