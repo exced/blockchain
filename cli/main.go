@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"strconv"
 
 	"github.com/exced/blockchain/consensus"
@@ -14,35 +18,35 @@ import (
 )
 
 func main() {
-	httpAddr := flag.String("http", ":3000", "HTTP listen address")
-	rsaFilePath := flag.String("r", "./private.pem", "RSA key file")
+	httpPort := flag.Int("http", 3000, "HTTP port send address")
+	rsaFilePath := flag.String("i", "./private.pem", "RSA key file")
 	rsaGenFilePath := flag.String("o", "./private.pem", "RSA key generated file")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
-		log.Fatal("usage:\n\t send from to amount \n\t gen")
+		log.Fatal("usage:\n\t send to amount \n\t gen")
 	}
 
 	switch flag.Arg(0) {
 	case "gen":
 		crypto.GenRsaFile(*rsaGenFilePath)
 	case "send":
-		if flag.NArg() < 4 {
-			log.Fatal("usage:\n\t send from to amount\n")
+		if flag.NArg() < 3 {
+			log.Fatal("usage:\n\t send to amount\n")
 		}
 		// args
-		amount, err := strconv.ParseInt(flag.Arg(3), 10, 64)
+		amount, err := strconv.ParseInt(flag.Arg(2), 10, 64)
 		if err != nil {
 			log.Fatalf("given amount could not be parsed as int: %v: %v", amount, err)
 		}
-		send(*rsaFilePath, *httpAddr, flag.Arg(1), flag.Arg(2), amount)
+		send(*rsaFilePath, *httpPort, flag.Arg(1), amount)
 	default:
 		panic("command does not exist")
 	}
 }
 
 // send cryptocurrency
-func send(rsaFilePath, rpcAddr, from, to string, amount int64) {
+func send(rsaFilePath string, httpPort int, to string, amount int64) {
 
 	// rsa key
 	rsaPrivateKey, err := crypto.OpenRsaFile(rsaFilePath)
@@ -51,25 +55,33 @@ func send(rsaFilePath, rpcAddr, from, to string, amount int64) {
 	}
 	rsaPublicKey := &rsaPrivateKey.PublicKey
 
-	// transaction
-	transaction := &core.Transaction{From: *rsaPublicKey, To: to, Amount: amount}
-	transactionString, err := json.Marshal(transaction)
-	if err != nil {
-		log.Fatalf("could not marshal transaction: %#v: %v", transaction, err)
-	}
-
+	// hash private key to get id
 	hash := sha256.New()
-	io.WriteString(hash, string(transactionString))
+	io.WriteString(hash, string(fmt.Sprintf("%v", rsaPrivateKey)))
+
+	// transaction
+	transaction := &core.Transaction{From: fmt.Sprintf("%x", hash.Sum(nil)), To: to, Amount: amount}
+
+	// cipher transaction
+	hash = sha256.New()
+	io.WriteString(hash, string(fmt.Sprintf("%v", transaction)))
 	sig, err := crypto.Sign(hash.Sum(nil), rsaPrivateKey)
 	if err != nil {
 		log.Fatalf("failed to sign hash %s: %v", hash.Sum(nil), err)
 	}
 
-	rsaPublicKeyBytes, err := crypto.GetBytes(rsaPublicKey)
-	if err != nil {
-		log.Fatalf("failed to get bytes of %v : %v", rsaPublicKey, err)
+	// prepare transaction message
+	transactionMessage := &consensus.TransactionMessage{
+		Signature:    sig,
+		Hash:         hash.Sum(nil),
+		RsaPublicKey: rsaPublicKey,
+		Transaction:  transaction,
 	}
-	transactionMessage := &consensus.TransactionMessage{Signature: sig, Hash: hash.Sum(nil), Rsapublickey: rsaPublicKeyBytes}
 
-	// send
+	// send : HTTP POST
+	b := new(bytes.Buffer)
+	json.NewEncoder(b).Encode(transactionMessage)
+	resp, _ := http.Post(fmt.Sprintf("http://localhost:%d/send", httpPort), "application/json; charset=utf-8", b)
+	body, _ := ioutil.ReadAll(resp.Body)
+	log.Println("Response:", string(body))
 }

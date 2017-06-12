@@ -29,9 +29,10 @@ type PeerStatusMessage struct {
 
 // TransactionMessage is sent when a client do a send request
 type TransactionMessage struct {
-	Signature []byte         `json:"signature"`
-	Hash      []byte         `json:"hash"`
-	PublicKey *rsa.PublicKey `json:"publickey"`
+	Signature    []byte            `json:"signature"`
+	Hash         []byte            `json:"hash"`
+	RsaPublicKey *rsa.PublicKey    `json:"rsapublickey"`
+	Transaction  *core.Transaction `json:"transaction"`
 }
 
 // BlockMessage is sent to show up mined block to consensus

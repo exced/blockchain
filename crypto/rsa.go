@@ -1,12 +1,10 @@
 package crypto
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/gob"
 	"encoding/pem"
 	"io/ioutil"
 )
@@ -40,14 +38,4 @@ func OpenRsaFile(path string) (*rsa.PrivateKey, error) {
 	}
 	block, _ := pem.Decode(f)
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
-}
-
-func GetBytes(key interface{}) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(key)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
