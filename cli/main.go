@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	httpPort := flag.Int("http", 3000, "HTTP port send address")
+	httpPort := flag.Int("p", 3000, "HTTP port send address")
 	rsaFilePath := flag.String("i", "./private.pem", "RSA key file")
 	rsaGenFilePath := flag.String("o", "./private.pem", "RSA key generated file")
 	flag.Parse()

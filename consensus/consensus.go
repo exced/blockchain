@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 
 	"crypto/rsa"
 
@@ -15,31 +15,32 @@ import (
 // Consensus represents a set of peers which work together to build a valid blockchain.
 // Each peer is a slave for the network and a master for client
 type Consensus struct {
-	Tick       time.Time        `json:"tick"`       // time of next tick
-	HashRate   time.Duration    `json:"hashrate"`   // hashrate duration
-	Difficulty int              `json:"difficulty"` // number of 0 required at the beginning of the hash : Proof of Work
-	Blockchain *core.Blockchain `json:"blockchain"` // latest blockchain
-	Peers      map[*Peer]bool   `json:"peers"`      // connected peers
+	Tick       time.Time                `json:"tick"`       // time of next tick
+	HashRate   time.Duration            `json:"hashrate"`   // hashrate duration
+	Difficulty int                      `json:"difficulty"` // number of 0 required at the beginning of the hash : Proof of Work
+	Peers      map[*websocket.Conn]bool `json:"peers"`      // connected peers
 }
 
 // NewConsensus returns new consensus
 func NewConsensus() *Consensus {
-	return &Consensus{}
+	hashRate := time.Duration(600) * time.Second // 10 minutes
+	tick := time.Now().Add(hashRate)
+	return &Consensus{Tick: tick, HashRate: hashRate, Difficulty: 4}
 }
 
 // Connect connects to peer address and await for its consensus response.
-func Connect(addr string) (*Consensus, error) {
-	ws, err := websocket.Dial(addr, "", addr)
+func Connect(url string) (*Consensus, error) {
+	var dialer *websocket.Dialer
+
+	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		return nil, err
 	}
-	// get other peer consensus
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
 	var c = &Consensus{}
-	var msg []byte
-	err = websocket.Message.Receive(ws, &msg)
-	if err != nil {
-		return nil, err
-	}
 	err = json.Unmarshal(msg, c)
 	if err != nil {
 		return nil, err
@@ -49,37 +50,10 @@ func Connect(addr string) (*Consensus, error) {
 
 // Connect notify myself to network
 func (c *Consensus) Connect(publickey *rsa.PublicKey) {
-	msg, _ := json.Marshal(&PeerStatusMessage{PublicKey: publickey, Status: true})
 	// Broadcast New Peer
 	for peer := range c.Peers {
-		peer.Conn.Write(msg)
+		peer.WriteJSON(&PeerStatusMessage{PublicKey: publickey, Status: true})
 	}
-}
-
-// HandlePeerConnection sends Consensus to newly connected peer
-func (c *Consensus) HandlePeerConnection(ws *websocket.Conn) error {
-	consensus, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
-	ws.Write(consensus)
-	return nil
-}
-
-// ListenAndServe serves network by mining and handling consensus queries
-func (c *Consensus) ListenAndServe() {
-	broadcast := make(chan Message)
-	go c.handleBroadcast(broadcast)
-
-	for {
-		// time
-		go func() {
-			for range time.Tick(time.Until(c.Tick)) {
-			}
-			// c.Tick += c.HashRate
-		}()
-	}
-
 }
 
 // Validate block
@@ -87,18 +61,14 @@ func (c *Consensus) Validate(b *core.Block) bool {
 	return crypto.MatchHash(b.ToHash(), c.Difficulty)
 }
 
-func (c *Consensus) handleBroadcast(broadcast <-chan Message) {
-	for {
-		// Grab the next message from the broadcast channel
-		msg := <-broadcast
-		mmsg, _ := json.Marshal(msg)
-		// Send it out to every peer that is currently connected
-		for peer := range c.Peers {
-			_, err := peer.Conn.Write(mmsg)
-			if err != nil {
-				peer.Conn.Close()
-				delete(c.Peers, peer)
-			}
+// Broadcast given Message to all peers
+func (c *Consensus) Broadcast(msg Message) {
+	// Send it out to every peer that is currently connected
+	for peer := range c.Peers {
+		err := peer.WriteJSON(msg)
+		if err != nil {
+			peer.Close()
+			delete(c.Peers, peer)
 		}
 	}
 }

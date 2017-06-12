@@ -1,12 +1,19 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"time"
+
+	"github.com/gorilla/websocket"
 
 	c "github.com/exced/blockchain/consensus"
 	"github.com/exced/blockchain/core"
@@ -16,58 +23,75 @@ import (
 var (
 	pendingTransactions []*core.Transaction
 	consensus           *c.Consensus
+	blockchain          *core.Blockchain
 )
 
+// Configure the upgrader
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
 func main() {
-	httpPort := flag.Int("http", 3000, "HTTP port")
-	rsaFilePath := flag.String("i", "../private.pem", "RSA key file")
-	// blockchainFilePath := flag.String("b", "./blockchain", "Blockchain file")
+	httpPort := flag.Int("p", 3000, "HTTP listen port")
+	rsaFile := flag.String("i", "../private.pem", "RSA key file")
+	blockchainFile := flag.String("b", "./blockchain", "Blockchain file")
 	flag.Parse()
 
 	// rsa key
-	rsaPrivateKey, err := crypto.OpenRsaFile(*rsaFilePath)
+	rsaPrivateKey, err := crypto.OpenRsaFile(*rsaFile)
 	if err != nil {
 		log.Fatal("could not open rsa file", err)
 	}
-	rsaPublicKey := &rsaPrivateKey.PublicKey
-	log.Println("rsapublickey ", rsaPublicKey)
+
+	// hash private key to get id
+	hash := sha256.New()
+	io.WriteString(hash, string(fmt.Sprintf("%v", rsaPrivateKey)))
+	personalID := fmt.Sprintf("%x", hash.Sum(nil))
+
+	log.Println(personalID)
 
 	// Genesis Peer
 	if flag.NArg() < 1 {
+		// New Consensus
 		consensus = c.NewConsensus()
+		blockchain = core.NewBlockchain()
 	} else {
-		// args
+		// Connect and Get Consensus
 		p2pPort, err := strconv.ParseInt(flag.Arg(0), 10, 64)
 		if err != nil {
 			log.Fatalf("given p2p port could not be parsed as int: %v: %v", p2pPort, err)
 		}
-		consensus, err = c.Connect(fmt.Sprintf("localhost:%d", p2pPort))
+		consensus, err = c.Connect(fmt.Sprintf("ws://localhost:%d/ws", p2pPort))
 		if err != nil {
 			log.Fatalf("could not connect to consensus %d : %v", p2pPort, err)
 		}
 	}
 
-	// Handle peers connection
-	// http.HandleFunc("/ws", websocket.Handler(consensus.HandlePeerConnection))
+	// Serve HTTP
 	http.HandleFunc("/blockchain", handleBlockchain)
 	http.HandleFunc("/send", handleSend)
-
-	// Serve HTTP
-	log.Printf("HTTP listening to port %d", *httpPort)
-	http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil)
-
-	// Serve Network
-	go consensus.ListenAndServe()
+	http.HandleFunc("/ws", handleConnection)
+	go func() {
+		log.Printf("HTTP listening to port %d", *httpPort)
+		http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil)
+	}()
 
 	// mine
-	go func() {
-		// b := c.Blockchain.Mine(c.Difficulty)
-		// if crypto.MatchHash(b.ToHash(), c.Difficulty) {
+	// go mine()
 
-		// }
-		// Broadcast Mined Block
-		// broadcast <- &Message{Type: BlockMessage, Message: &BlockMessage{Block: b}}
+	// Capture SIGTERM
+	signalChan := make(chan os.Signal, 1)
+	cleanupDone := make(chan bool)
+	signal.Notify(signalChan, os.Interrupt)
+	go func() {
+		<-signalChan
+		log.Printf("Saving blockchain locally at %s", *blockchainFile)
+		core.Save(*blockchainFile, blockchain)
+		cleanupDone <- true
 	}()
+	<-cleanupDone
 }
 
 func handleSend(w http.ResponseWriter, r *http.Request) {
@@ -88,5 +112,55 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleBlockchain(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(consensus.Blockchain)
+	json.NewEncoder(w).Encode(blockchain)
+}
+
+func handleConnection(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("WSHANDLEP2P")
+	// Upgrade initial GET request to a websocket
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer ws.Close()
+
+	// Register our new peer
+	consensus.Peers[ws] = true
+
+	for {
+		var msg c.Message
+		// Read in a new message as JSON and map it to a Message object
+		err := ws.ReadJSON(&msg)
+		if err != nil {
+			log.Printf("error: %v", err)
+			delete(consensus.Peers, ws)
+			break
+		}
+		// handling message
+		switch msg.Type {
+		case c.PeerStatus:
+		case c.Transaction:
+		case c.Block:
+		}
+		// Send the newly received message to the broadcast channel
+		consensus.Broadcast(msg)
+	}
+}
+
+func mine() {
+	// notify
+	go func() {
+		for range time.Tick(time.Until(consensus.Tick)) {
+		}
+		consensus.Tick = consensus.Tick.Add(consensus.HashRate)
+	}()
+	for {
+
+	}
+	b := blockchain.Mine(consensus.Difficulty)
+	if crypto.MatchHash(b.ToHash(), consensus.Difficulty) {
+
+	}
+	// Broadcast Mined Block
+	consensus.Broadcast(c.Message{Type: c.Block, Message: &c.BlockMessage{Block: b}})
 }

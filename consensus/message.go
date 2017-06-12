@@ -9,6 +9,7 @@ import (
 // MessageType represents an enumeration for peers messages
 type MessageType int
 
+// PeerStatus, Transaction, Block represents Type for corresponding message
 const (
 	PeerStatus MessageType = iota // peer connect / disconnect
 	Transaction
@@ -38,5 +39,5 @@ type TransactionMessage struct {
 // BlockMessage is sent to show up mined block to consensus
 type BlockMessage struct {
 	Block *core.Block `json:"block"` // mined block
-	Peer  *Peer       `json:"peer"`  // miner validator
+	From  string      `json:"from"`  // from ID to know who rewards
 }

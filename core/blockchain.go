@@ -3,8 +3,8 @@ package core
 // Blockchain is a list of blocks.
 type Blockchain []*Block
 
-// newBlockchain build a new blockchain from the genesis block.
-func newBlockchain() *Blockchain {
+// NewBlockchain build a new blockchain from the genesis block.
+func NewBlockchain() *Blockchain {
 	return &Blockchain{genesisBlock}
 }
 
