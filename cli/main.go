@@ -62,9 +62,9 @@ func send(rsaFilePath string, httpPort int, to string, amount int64) {
 	// transaction
 	transaction := &core.Transaction{From: fmt.Sprintf("%x", hash.Sum(nil)), To: to, Amount: amount}
 
-	// cipher transaction
+	// Sign transaction
 	hash = sha256.New()
-	io.WriteString(hash, string(fmt.Sprintf("%v", transaction)))
+	io.WriteString(hash, fmt.Sprintf("%v", transaction))
 	sig, err := crypto.Sign(hash.Sum(nil), rsaPrivateKey)
 	if err != nil {
 		log.Fatalf("failed to sign hash %s: %v", hash.Sum(nil), err)

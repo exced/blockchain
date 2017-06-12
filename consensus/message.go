@@ -3,6 +3,8 @@ package consensus
 import (
 	"crypto/rsa"
 
+	"github.com/gorilla/websocket"
+
 	"github.com/exced/blockchain/core"
 )
 
@@ -24,8 +26,8 @@ type Message struct {
 
 // PeerStatusMessage is sent when a peer has connected
 type PeerStatusMessage struct {
-	PublicKey *rsa.PublicKey `json:"publickey"`
-	Status    bool           `json:"status"` // true if connect, false if disconnect
+	Conn   *websocket.Conn `json:"conn"`
+	Status bool            `json:"status"` // true if connect, false if disconnect
 }
 
 // TransactionMessage is sent when a client do a send request

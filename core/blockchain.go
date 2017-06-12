@@ -31,10 +31,9 @@ func (bc *Blockchain) getGenesis() *Block {
 	return (*bc)[0]
 }
 
-// AddBlock add a new block at the end of the blockchain
-func (bc *Blockchain) AddBlock(data string) {
-	nb := bc.getLastBlock().genNext(data)
-	*bc = append(*bc, nb)
+// AppendBlock append a new block at the end of the blockchain
+func (bc *Blockchain) AppendBlock(b *Block) {
+	*bc = append(*bc, b)
 }
 
 // IsValid tests if all blocks of the blockchain are valid
