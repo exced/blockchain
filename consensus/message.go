@@ -3,8 +3,6 @@ package consensus
 import (
 	"crypto/rsa"
 
-	"github.com/gorilla/websocket"
-
 	"github.com/exced/blockchain/core"
 )
 
@@ -13,8 +11,7 @@ type MessageType int
 
 // PeerStatus, Transaction, Block represents Type for corresponding message
 const (
-	PeerStatus MessageType = iota // peer connect / disconnect
-	Transaction
+	Transaction = iota
 	Block
 )
 
@@ -22,12 +19,6 @@ const (
 type Message struct {
 	Type    MessageType `json:"type"`
 	Message interface{} `json:"message"`
-}
-
-// PeerStatusMessage is sent when a peer has connected
-type PeerStatusMessage struct {
-	Conn   *websocket.Conn `json:"conn"`
-	Status bool            `json:"status"` // true if connect, false if disconnect
 }
 
 // TransactionMessage is sent when a client do a send request

@@ -24,7 +24,6 @@ var (
 	pendingTransactions []*core.Transaction
 	consensus           *c.Consensus
 	blockchain          *core.Blockchain
-	network             = c.NewNetwork()
 )
 
 // Configure the upgrader
@@ -49,9 +48,9 @@ func main() {
 	// hash private key to get id
 	hash := sha256.New()
 	io.WriteString(hash, fmt.Sprintf("%v", rsaPrivateKey))
-	personalID := fmt.Sprintf("%x", hash.Sum(nil))
+	ID := fmt.Sprintf("%x", hash.Sum(nil))
 
-	log.Println(personalID)
+	log.Println(ID)
 
 	// Genesis Peer
 	if flag.NArg() < 1 {
@@ -59,17 +58,17 @@ func main() {
 		consensus = c.NewConsensus()
 		blockchain = core.NewBlockchain()
 	} else {
-		// Connect and Get Consensus
+		// args consensus port
 		p2pPort, err := strconv.ParseInt(flag.Arg(0), 10, 64)
 		if err != nil {
 			log.Fatalf("given p2p port could not be parsed as int: %v: %v", p2pPort, err)
 		}
+		// Connect and Get Consensus
 		log.Print(fmt.Sprintf("Connecting to ws://localhost:%d/ws", p2pPort))
 		consensus, err = c.Connect(fmt.Sprintf("ws://localhost:%d/ws", p2pPort))
 		if err != nil {
 			log.Printf("disconnected from %d : %v", p2pPort, err)
 		}
-		log.Printf("consensus: %#v ", consensus)
 	}
 
 	// Serve HTTP
@@ -125,51 +124,31 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("could not upgrade websocket", err)
 	}
 	defer conn.Close()
-
-	// send my consensus
+	// update next tick and send my consensus
+	consensus.UpdateNext()
 	conn.WriteJSON(consensus)
-
 	// Register our new peer
-	network.Peers[conn] = "conn"
-
-	for {
-		var msg c.Message
-		// Read in a new message as JSON and map it to a Message object
-		err := conn.ReadJSON(&msg)
-		if err != nil {
-			log.Printf("error: %v", err)
-			delete(network.Peers, conn)
-			break
-		}
-		// handling message
-		switch msg.Type {
-		case c.PeerStatus:
-			log.Println("msg PeerStatus")
-		case c.Transaction:
-			log.Println("msg Transaction")
-		case c.Block:
-			log.Println("msg Block")
-		}
-		// Send the newly received message to the network
-		network.Broadcast(msg)
-	}
+	peer := &c.Peer{Conn: conn}
+	consensus.Network.Add(peer)
+	// Serve this new peer
+	go peer.ListenAndServe()
 }
 
 func mine() {
+	// sleep until next Tick to begin mining
+	time.Sleep(time.Until(consensus.Next))
 	var b *core.Block
-	// notify
+	// Mine block
 	go func() {
-		for range time.Tick(time.Until(consensus.Tick)) {
+		for !crypto.MatchHash(b.ToHash(), consensus.Difficulty) {
+			b = blockchain.Mine(consensus.Difficulty)
 		}
-		consensus.Tick = consensus.Tick.Add(consensus.HashRate)
 	}()
-	for {
-
-	}
-	b = blockchain.Mine(consensus.Difficulty)
-	if crypto.MatchHash(b.ToHash(), consensus.Difficulty) {
-
-	}
-	// Broadcast Mined Block
-	network.Broadcast(c.Message{Type: c.Block, Message: &c.BlockMessage{Block: b}})
+	// Broadcast mined block
+	go func() {
+		for range time.Tick(consensus.HashRate) {
+			fmt.Println("broadcasting to ", consensus.Network)
+			consensus.Broadcast(c.Message{Type: c.Block, Message: &c.BlockMessage{Block: b}})
+		}
+	}()
 }
