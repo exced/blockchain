@@ -54,6 +54,19 @@ func (b *Block) Mine(difficulty int) *Block {
 	return b
 }
 
+// IsTransactionValid tests if given transactions are valid with current transactions chain
+func (b *Block) IsTransactionValid(t *Transaction) bool {
+	balances := make(map[string]int64) // key - amount
+	for _, t := range b.Transactions {
+		balances[t.From] -= t.Amount
+		balances[t.To] += t.Amount
+	}
+	if balances[t.From] < t.Amount {
+		return false
+	}
+	return true
+}
+
 // areTransactionsValid tests if given transactions are valid with current transactions chain
 func (b *Block) areTransactionsValid(transactions []*Transaction) bool {
 	balances := make(map[string]int64) // key - amount

@@ -7,7 +7,7 @@ import (
 	"runtime"
 )
 
-// Encode via Gob to file
+// Save encode via Gob to file
 func Save(path string, object interface{}) error {
 	file, err := os.Create(path)
 	if err == nil {
@@ -18,7 +18,7 @@ func Save(path string, object interface{}) error {
 	return err
 }
 
-// Decode Gob file
+// Load decode Gob file
 func Load(path string, object interface{}) error {
 	file, err := os.Open(path)
 	if err == nil {
@@ -29,6 +29,7 @@ func Load(path string, object interface{}) error {
 	return err
 }
 
+// Check
 func Check(e error) {
 	if e != nil {
 		_, file, line, _ := runtime.Caller(1)

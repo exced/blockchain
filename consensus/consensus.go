@@ -24,7 +24,7 @@ func NewConsensus() *Consensus {
 	return &Consensus{Next: time.Now().Add(hashRate), HashRate: hashRate, Difficulty: 4}
 }
 
-// Validate block
-func (c *Consensus) Validate(b *core.Block) bool {
+// Validate given block according to given responses and received consensus
+func (c *Consensus) Validate(b *core.Block, resp []*Message) bool {
 	return crypto.MatchHash(b.ToHash(), c.Difficulty)
 }

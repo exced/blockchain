@@ -52,6 +52,10 @@ func (bc *Blockchain) IsValid() bool {
 	return true
 }
 
+func (bc *Blockchain) IsTransactionValid(t *Transaction) bool {
+	return bc.getLastBlock().IsTransactionValid(t)
+}
+
 // Mine looks for a nonce for the last block of received blockchain to satisfy given difficulty
 func (bc *Blockchain) Mine(difficulty int) *Block {
 	return bc.getLastBlock().Mine(difficulty)

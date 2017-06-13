@@ -12,7 +12,8 @@ type MessageType int
 
 // PeerStatus, Transaction, Block represents Type for corresponding message
 const (
-	Transaction = iota
+	PeerStatus = iota
+	Transaction
 	Block
 )
 
@@ -20,6 +21,12 @@ const (
 type Message struct {
 	Type    MessageType     `json:"type"`
 	Message json.RawMessage `json:"message"`
+}
+
+// PeerStatusMessage is sent when a peer connect or disconnect
+type PeerStatusMessage struct {
+	Peer   *Peer `json:"peer"`
+	Status bool  `json:"status"`
 }
 
 // TransactionMessage is sent when a client do a send request
@@ -32,6 +39,7 @@ type TransactionMessage struct {
 
 // BlockMessage is sent to show up mined block to consensus
 type BlockMessage struct {
-	Block *core.Block `json:"block"` // mined block
-	From  string      `json:"from"`  // from ID to know who rewards
+	Block  *core.Block `json:"block"`  // mined block
+	From   string      `json:"from"`   // from ID to know who rewards
+	Status bool        `json:"status"` // true: accepted, false: rejected
 }

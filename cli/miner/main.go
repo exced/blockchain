@@ -115,7 +115,10 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("%#v", t.Transaction)
-	pendingTransactions = append(pendingTransactions, t.Transaction)
+	if blockchain.IsTransactionValid(t.Transaction) {
+		pendingTransactions = append(pendingTransactions, t.Transaction)
+		network.Broadcast(c.Message{Type: c.TransactionMessage, Message: t})
+	}
 }
 
 func handleBlockchain(w http.ResponseWriter, r *http.Request) {
@@ -158,11 +161,15 @@ func Mine() {
 				msg, _ := json.Marshal(&c.BlockMessage{Block: b, From: localID})
 				network.Broadcast(c.Message{Type: c.Block, Message: msg})
 			}
+			// aggregate peers responses
+			resp := network.Aggregate()
 			// append accepted block
 			accepted := consensus.Accepted()
 			blockchain.AppendBlock(accepted)
 			// update next tick
 			consensus.UpdateNext()
+			// work on "new clean" block: link + transactions history
+			b = blockchain.Next()
 		}
 	}()
 }
@@ -178,15 +185,25 @@ func ListenAndServe(peer *c.Peer) {
 		}
 		// handling message
 		switch msg.Type {
+		case c.PeerStatus:
+			log.Println("msg PeerStatus")
+			var peerStatusMsg *c.PeerStatusMessage
+			err = json.Unmarshal(msg.Message, &peerStatusMsg)
+			network.Add(peerStatusMsg.Peer)
+			go ListenAndServe(peerStatusMsg.Peer)
 		case c.Transaction:
 			log.Println("msg Transaction")
-			var transaction *core.Transaction
-			err = json.Unmarshal(msg.Message, &transaction)
-			pendingTransactions = append(pendingTransactions, transaction)
+			var transactionMsg *c.TransactionMessage
+			err = json.Unmarshal(msg.Message, &transactionMsg)
+			if blockchain.IsTransactionValid(t.Transaction) {
+				pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
+			}
 		case c.Block:
 			log.Println("msg Block")
-			var block *core.Block
-			err = json.Unmarshal(msg.Message, &block)
+			var blockMsg *c.BlockMessage
+			err = json.Unmarshal(msg.Message, &blockMsg)
+			msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Status: blockMsg.Block.IsValid()})
+			network.Broadcast(c.Message{Type: c.Block, Message: msg})
 		}
 	}
 }

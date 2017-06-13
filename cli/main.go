@@ -79,9 +79,13 @@ func send(rsaFilePath string, httpPort int, to string, amount int64) {
 	}
 
 	// send : HTTP POST
+	addr := fmt.Sprintf("http://localhost:%d/send", httpPort)
 	b := new(bytes.Buffer)
 	json.NewEncoder(b).Encode(transactionMessage)
-	resp, _ := http.Post(fmt.Sprintf("http://localhost:%d/send", httpPort), "application/json; charset=utf-8", b)
+	resp, err := http.Post(addr, "application/json; charset=utf-8", b)
+	if err != nil {
+		log.Fatalf("failed to post to %s : %v", addr, err)
+	}
 	body, _ := ioutil.ReadAll(resp.Body)
 	log.Println("Response:", string(body))
 }
