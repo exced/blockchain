@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"crypto/rsa"
+	"encoding/json"
 
 	"github.com/exced/blockchain/core"
 )
@@ -17,8 +18,8 @@ const (
 
 // Message represents msg communication between peers
 type Message struct {
-	Type    MessageType `json:"type"`
-	Message interface{} `json:"message"`
+	Type    MessageType     `json:"type"`
+	Message json.RawMessage `json:"message"`
 }
 
 // TransactionMessage is sent when a client do a send request
