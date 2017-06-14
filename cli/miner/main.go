@@ -72,15 +72,15 @@ func main() {
 		}
 		consensus = dialResponse.Consensus
 		network = dialResponse.Network
+		blockchain = new(core.Blockchain)
 		err = core.Load(*blockchainFile, blockchain)
 		if err != nil {
+			blockchain = core.NewBlockchain()
 			log.Printf("could not load blockchain stored at %s: %v", *blockchainFile, err)
 		}
-		tail, err := c.FetchBlockchain(dialResponse.Conn, blockchain)
-		if err != nil {
-			log.Fatal("could not fetch blockchain : ", err)
-		}
-		blockchain.Append(tail)
+		log.Println("BLOCKCHAIN ", blockchain)
+		log.Println("DIALRESPONSE ", dialResponse)
+		blockchain.Fetch(dialResponse.Blockchain)
 	}
 
 	// Serve HTTP
@@ -146,7 +146,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	dialResponse := &c.DialResponse{Conn: conn, Consensus: consensus, Network: network}
+	dialResponse := &c.DialResponse{Consensus: consensus, Network: network, Blockchain: blockchain}
 	// send dial response
 	conn.WriteJSON(dialResponse)
 	// Register our new peer
@@ -231,15 +231,5 @@ func ListenAndServe(peer *c.Peer) {
 			block = blockchain.GenNext(pendingTransactions)
 			// flush pending transactions
 			pendingTransactions = make([]*core.Transaction, 0)
-		case c.Blockchain:
-			log.Println("msg Blockchain")
-			var blockchainMsg *c.BlockchainMessage
-			err = json.Unmarshal(msg.Message, &blockchainMsg)
-			// returns nodes which are in this blockchain but not in given blockchain
-			len := blockchainMsg.Blockchain.Len()
-			tail := (*blockchainMsg.Blockchain)[len-1:]
-			msg, _ := json.Marshal(&c.BlockchainMessage{Blockchain: &tail})
-			peer.Conn.WriteJSON(c.Message{Type: c.Blockchain, Message: msg})
-		}
 	}
 }

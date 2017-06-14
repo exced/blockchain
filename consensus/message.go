@@ -16,7 +16,6 @@ const (
 	Transaction
 	Block
 	BlockPoW
-	Blockchain
 )
 
 // Message represents msg communication between peers
@@ -51,9 +50,4 @@ type BlockPoWMessage struct {
 	Block      *core.Block `json:"block"`      // mined block
 	From       string      `json:"from"`       // from ID to know who rewards
 	Signatures []*Message  `json:"signatures"` // signature of peer who validated this block
-}
-
-// BlockchainMessage is sent to ask to fetch current blockchain
-type BlockchainMessage struct {
-	Blockchain *core.Blockchain `json:"blockchain"`
 }

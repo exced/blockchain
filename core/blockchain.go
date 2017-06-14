@@ -67,3 +67,18 @@ func (bc *Blockchain) Mine(difficulty int) *Block {
 func (bc *Blockchain) GenNext(transactions []*Transaction) *Block {
 	return bc.GetLastBlock().GenNext(transactions)
 }
+
+func (bc *Blockchain) Fetch(other *Blockchain) {
+	if other.Len() < bc.Len() {
+		return
+	}
+	if !other.IsValid() {
+		return
+	}
+	for i, block := range *other {
+		if block != (*bc)[i] {
+			return
+		}
+	}
+	copy(*bc, *other)
+}
