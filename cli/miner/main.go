@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -21,11 +20,12 @@ import (
 )
 
 var (
-	pendingTransactions []*core.Transaction
+	pendingTransactions = make([]*core.Transaction, 0)
 	consensus           *c.Consensus
 	network             *c.Network
-	blockchain          *core.Blockchain
-	localID             string // id of the local peer
+	block               *core.Block      // pending block
+	blockchain          *core.Blockchain // blockchain
+	localID             string           // id of this peer, used to grant PoW
 )
 
 // Configure the upgrader
@@ -63,12 +63,24 @@ func main() {
 		if err != nil {
 			log.Fatalf("given p2p port could not be parsed as int: %v: %v", p2pPort, err)
 		}
-		// Handshake protocol: Connect and Get Consensus and currnet network
-		log.Print(fmt.Sprintf("Connecting to ws://localhost:%d/ws", p2pPort))
-		consensus, network, err = c.Connect(fmt.Sprintf("ws://localhost:%d/ws", p2pPort))
+		// Handshake protocol: Connect and get dial response
+		addr := fmt.Sprintf("ws://localhost:%d/ws", p2pPort)
+		log.Printf("Connecting to %s", addr)
+		dialResponse, err := c.Connect(addr)
 		if err != nil {
-			log.Printf("disconnected from %d : %v", p2pPort, err)
+			log.Printf("disconnected from %s : %v", addr, err)
 		}
+		consensus = dialResponse.Consensus
+		network = dialResponse.Network
+		err = core.Load(*blockchainFile, blockchain)
+		if err != nil {
+			log.Printf("could not load blockchain stored at %s: %v", *blockchainFile, err)
+		}
+		tail, err := c.FetchBlockchain(dialResponse.Conn, blockchain)
+		if err != nil {
+			log.Fatal("could not fetch blockchain : ", err)
+		}
+		blockchain.Append(tail)
 	}
 
 	// Serve HTTP
@@ -115,9 +127,10 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("%#v", t.Transaction)
-	if blockchain.IsTransactionValid(t.Transaction) {
+	if block.IsTransactionValid(t.Transaction) {
 		pendingTransactions = append(pendingTransactions, t.Transaction)
-		network.Broadcast(c.Message{Type: c.TransactionMessage, Message: t})
+		msg, _ := json.Marshal(t)
+		network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
 	}
 }
 
@@ -132,10 +145,10 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("could not upgrade websocket", err)
 	}
 	defer conn.Close()
-	// send my consensus
-	conn.WriteJSON(consensus)
-	// send my network
-	conn.WriteJSON(network)
+
+	dialResponse := &c.DialResponse{Conn: conn, Consensus: consensus, Network: network}
+	// send dial response
+	conn.WriteJSON(dialResponse)
 	// Register our new peer
 	peer := &c.Peer{Conn: conn}
 	network.Add(peer)
@@ -143,35 +156,36 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	go ListenAndServe(peer)
 }
 
+// Mine work on proof-of-work on the last block of its blockchain
 func Mine() {
-	// sleep until next Tick to begin mining
-	time.Sleep(time.Until(consensus.Next))
-	var b *core.Block
-	// Mine block
-	go func() {
-		for !crypto.MatchHash(b.ToHash(), consensus.Difficulty) {
-			b = blockchain.Mine(consensus.Difficulty)
+	block = blockchain.GetLastBlock()
+	for {
+		// Proof of Work
+		for !crypto.MatchHash(block.ToHash(), consensus.Difficulty) {
+			block = blockchain.Mine(consensus.Difficulty)
 		}
-	}()
-	// Broadcast mined block
-	go func() {
-		for range time.Tick(consensus.HashRate) {
-			if crypto.MatchHash(b.ToHash(), consensus.Difficulty) {
-				log.Println("broadcasting to ", network)
-				msg, _ := json.Marshal(&c.BlockMessage{Block: b, From: localID})
-				network.Broadcast(c.Message{Type: c.Block, Message: msg})
-			}
-			// aggregate peers responses
-			resp := network.Aggregate()
-			// append accepted block
-			accepted := consensus.Accepted()
-			blockchain.AppendBlock(accepted)
-			// update next tick
-			consensus.UpdateNext()
-			// work on "new clean" block: link + transactions history
-			b = blockchain.Next()
+		log.Println("BLOCK MINED !")
+		// Present block
+		log.Println("broadcasting to ", network)
+		msg, _ := json.Marshal(&c.BlockMessage{Block: block, From: localID, Signature: false})
+		network.Broadcast(c.Message{Type: c.Block, Message: msg})
+		// aggregate peers responses
+		responses := network.Aggregate()
+		// check validity
+		valid := consensus.Validate(block, responses)
+		if valid {
+			blockchain.AppendBlock(block)
+			msg, _ := json.Marshal(&c.BlockPoWMessage{Block: block, From: localID, Signatures: responses})
+			network.Broadcast(c.Message{Type: c.BlockPoW, Message: msg})
 		}
-	}()
+		blockchain.AppendBlock(block)
+		// update next tick
+		consensus.UpdateNext()
+		// work on "new clean" block: link + transactions history
+		block = blockchain.GenNext(pendingTransactions)
+		// flush pending transactions
+		pendingTransactions = make([]*core.Transaction, 0)
+	}
 }
 
 func ListenAndServe(peer *c.Peer) {
@@ -195,15 +209,37 @@ func ListenAndServe(peer *c.Peer) {
 			log.Println("msg Transaction")
 			var transactionMsg *c.TransactionMessage
 			err = json.Unmarshal(msg.Message, &transactionMsg)
-			if blockchain.IsTransactionValid(t.Transaction) {
+			if block.IsTransactionValid(transactionMsg.Transaction) {
 				pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
 			}
 		case c.Block:
 			log.Println("msg Block")
 			var blockMsg *c.BlockMessage
 			err = json.Unmarshal(msg.Message, &blockMsg)
-			msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Status: blockMsg.Block.IsValid()})
-			network.Broadcast(c.Message{Type: c.Block, Message: msg})
+			if blockchain.IsBlockValid(blockMsg.Block) {
+				msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Signature: true})
+				peer.Conn.WriteJSON(c.Message{Type: c.Block, Message: msg})
+			}
+		case c.BlockPoW:
+			log.Println("msg BlockPoW")
+			var blockPoWMsg *c.BlockPoWMessage
+			err = json.Unmarshal(msg.Message, &blockPoWMsg)
+			blockchain.AppendBlock(block)
+			// update next tick
+			consensus.UpdateNext()
+			// work on "new clean" block: link + transactions history
+			block = blockchain.GenNext(pendingTransactions)
+			// flush pending transactions
+			pendingTransactions = make([]*core.Transaction, 0)
+		case c.Blockchain:
+			log.Println("msg Blockchain")
+			var blockchainMsg *c.BlockchainMessage
+			err = json.Unmarshal(msg.Message, &blockchainMsg)
+			// returns nodes which are in this blockchain but not in given blockchain
+			len := blockchainMsg.Blockchain.Len()
+			tail := (*blockchainMsg.Blockchain)[len-1:]
+			msg, _ := json.Marshal(&c.BlockchainMessage{Blockchain: &tail})
+			peer.Conn.WriteJSON(c.Message{Type: c.Blockchain, Message: msg})
 		}
 	}
 }

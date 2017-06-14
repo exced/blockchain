@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/exced/blockchain/core"
@@ -14,6 +15,7 @@ type Consensus struct {
 	Difficulty int           `json:"difficulty"` // number of 0 required at the beginning of the hash : Proof of Work
 }
 
+// UpdateNext update the time of the next Tick adding hashRate to Now()
 func (c *Consensus) UpdateNext() {
 	c.Next = time.Now().Add(c.HashRate)
 }
@@ -25,6 +27,21 @@ func NewConsensus() *Consensus {
 }
 
 // Validate given block according to given responses and received consensus
-func (c *Consensus) Validate(b *core.Block, resp []*Message) bool {
-	return crypto.MatchHash(b.ToHash(), c.Difficulty)
+func (c *Consensus) Validate(block *core.Block, responses []*Message) bool {
+	noise := 0
+	valid := 0
+	for _, resp := range responses {
+		if resp.Type == Block {
+			var blockMsg *BlockMessage
+			err := json.Unmarshal(resp.Message, &blockMsg)
+			if (err != nil) || (blockMsg.Block != block) {
+				noise++
+				continue
+			}
+			if blockMsg.Signature {
+				valid++
+			}
+		}
+	}
+	return (2*valid > len(responses)-noise) && crypto.MatchHash(block.ToHash(), c.Difficulty)
 }

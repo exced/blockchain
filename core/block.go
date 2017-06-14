@@ -30,13 +30,13 @@ func (b *Block) ToHash() string {
 	return crypto.ToHash(fmt.Sprintf("%d%s%d%v%d", b.Index, b.PreviousHash, b.Timestamp, b.Transactions, b.Nonce))
 }
 
-// isValid retrieves the cryptographic validity between receiver block and given previous block.
-func (b *Block) isValid(pb *Block) bool {
+// IsValid retrieves the cryptographic validity between receiver block and given previous block.
+func (b *Block) IsValid(pb *Block) bool {
 	return b.Hash == b.ToHash() && b.Index == pb.Index+1 && b.PreviousHash == pb.Hash
 }
 
-// genNext creates the next block of receiver block given hashed data.
-func (b *Block) genNext(transactions []*Transaction) (nb *Block) {
+// GenNext creates the next block of receiver block given hashed data.
+func (b *Block) GenNext(transactions []*Transaction) (nb *Block) {
 	nb = &Block{
 		Index:        b.Index + 1,
 		PreviousHash: b.Hash,

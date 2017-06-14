@@ -15,6 +15,7 @@ func TestMatchHash(t *testing.T) {
 		{"023", 3, false},
 		{"000023", 3, true},
 		{"11123", 3, false},
+		{"000023", 4, true},
 	}
 	for _, c := range cases {
 		got := MatchHash(c.hash, c.difficulty)

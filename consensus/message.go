@@ -15,6 +15,8 @@ const (
 	PeerStatus = iota
 	Transaction
 	Block
+	BlockPoW
+	Blockchain
 )
 
 // Message represents msg communication between peers
@@ -39,7 +41,19 @@ type TransactionMessage struct {
 
 // BlockMessage is sent to show up mined block to consensus
 type BlockMessage struct {
-	Block  *core.Block `json:"block"`  // mined block
-	From   string      `json:"from"`   // from ID to know who rewards
-	Status bool        `json:"status"` // true: accepted, false: rejected
+	Block     *core.Block `json:"block"`     // mined block
+	From      string      `json:"from"`      // from ID to know who rewards
+	Signature bool        `json:"signature"` // signature of peer who validated this block
+}
+
+// BlockPoWMessage is sent to notify other peers that a block has been accepted by the consensus
+type BlockPoWMessage struct {
+	Block      *core.Block `json:"block"`      // mined block
+	From       string      `json:"from"`       // from ID to know who rewards
+	Signatures []*Message  `json:"signatures"` // signature of peer who validated this block
+}
+
+// BlockchainMessage is sent to ask to fetch current blockchain
+type BlockchainMessage struct {
+	Blockchain *core.Blockchain `json:"blockchain"`
 }

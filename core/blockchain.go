@@ -13,22 +13,24 @@ func (bc *Blockchain) Save(file string) error {
 	return Save(file, bc)
 }
 
-// OpenBlockchainFile open blockchain file
-func OpenBlockchainFile(file string) error {
-	var blockchain = &Blockchain{}
-	return Load(file, blockchain)
-}
-
 func (bc Blockchain) Len() int           { return len(bc) }
 func (bc Blockchain) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
 func (bc Blockchain) Less(i, j int) bool { return bc[i].Index < bc[j].Index }
 
-func (bc *Blockchain) getLastBlock() *Block {
+// GetLastBlock retrieves the last block of the blockchain
+func (bc *Blockchain) GetLastBlock() *Block {
 	return (*bc)[bc.Len()-1]
 }
 
 func (bc *Blockchain) getGenesis() *Block {
 	return (*bc)[0]
+}
+
+// Append given tail to received blockchain
+func (bc *Blockchain) Append(tail *Blockchain) {
+	for _, block := range *tail {
+		*bc = append(*bc, block)
+	}
 }
 
 // AppendBlock append a new block at the end of the blockchain
@@ -43,7 +45,7 @@ func (bc *Blockchain) IsValid() bool {
 	}
 	pb := (*bc)[0]
 	for i := 1; i < bc.Len(); i++ {
-		if (*bc)[i].isValid(pb) {
+		if (*bc)[i].IsValid(pb) {
 			pb = (*bc)[i]
 		} else {
 			return false
@@ -52,11 +54,16 @@ func (bc *Blockchain) IsValid() bool {
 	return true
 }
 
-func (bc *Blockchain) IsTransactionValid(t *Transaction) bool {
-	return bc.getLastBlock().IsTransactionValid(t)
+// IsBlockValid tests if given block is valid with the last block of the blockchain
+func (bc *Blockchain) IsBlockValid(b *Block) bool {
+	return b.IsValid(bc.GetLastBlock())
 }
 
 // Mine looks for a nonce for the last block of received blockchain to satisfy given difficulty
 func (bc *Blockchain) Mine(difficulty int) *Block {
-	return bc.getLastBlock().Mine(difficulty)
+	return bc.GetLastBlock().Mine(difficulty)
+}
+
+func (bc *Blockchain) GenNext(transactions []*Transaction) *Block {
+	return bc.GetLastBlock().GenNext(transactions)
 }
