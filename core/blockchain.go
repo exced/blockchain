@@ -68,17 +68,17 @@ func (bc *Blockchain) GenNext(transactions []*Transaction) *Block {
 	return bc.GetLastBlock().GenNext(transactions)
 }
 
-func (bc *Blockchain) Fetch(other *Blockchain) {
+func (bc *Blockchain) Fetch(other *Blockchain) *Blockchain {
 	if other.Len() < bc.Len() {
-		return
+		return bc
 	}
 	if !other.IsValid() {
-		return
+		return bc
 	}
-	for i, block := range *other {
-		if block != (*bc)[i] {
-			return
+	for i, block := range *bc {
+		if block != (*other)[i] {
+			return bc
 		}
 	}
-	copy(*bc, *other)
+	return other
 }

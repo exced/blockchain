@@ -78,9 +78,10 @@ func main() {
 			blockchain = core.NewBlockchain()
 			log.Printf("could not load blockchain stored at %s: %v", *blockchainFile, err)
 		}
-		log.Println("BLOCKCHAIN ", blockchain)
-		log.Println("DIALRESPONSE ", dialResponse)
-		blockchain.Fetch(dialResponse.Blockchain)
+		blockchain = blockchain.Fetch(dialResponse.Blockchain)
+		// Register this peer because it is not self registered in its network
+		peer := &c.Peer{Conn: dialResponse.Conn}
+		network.Add(peer)
 	}
 
 	// Serve HTTP
@@ -92,10 +93,12 @@ func main() {
 		http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil)
 	}()
 
-	// Listen and serve peers
-	for _, peer := range network.Peers {
-		go ListenAndServe(peer)
-	}
+	go func() {
+		// Listen and serve peers
+		for _, peer := range network.Peers {
+			go ListenAndServe(peer)
+		}
+	}()
 
 	// mine
 	go Mine()
@@ -189,6 +192,7 @@ func Mine() {
 }
 
 func ListenAndServe(peer *c.Peer) {
+	log.Println("listening to ", peer)
 	for {
 		var msg c.Message
 		// Read in a new message as JSON and map it to a Message object
@@ -231,5 +235,6 @@ func ListenAndServe(peer *c.Peer) {
 			block = blockchain.GenNext(pendingTransactions)
 			// flush pending transactions
 			pendingTransactions = make([]*core.Transaction, 0)
+		}
 	}
 }
