@@ -47,7 +47,6 @@ func main() {
 
 // send cryptocurrency
 func send(rsaFilePath string, httpPort int, to string, amount int64) {
-
 	// rsa key
 	rsaPrivateKey, err := crypto.OpenRsaFile(rsaFilePath)
 	if err != nil {

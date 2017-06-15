@@ -6,5 +6,6 @@ import (
 
 // Peer is a wrapper of a websocket connection.
 type Peer struct {
-	Conn *websocket.Conn `json:"conn"`
+	Address string          `json:"address"`
+	Conn    *websocket.Conn `json:"conn"`
 }

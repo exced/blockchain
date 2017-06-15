@@ -38,7 +38,7 @@ var upgrader = websocket.Upgrader{
 func main() {
 	httpPort := flag.Int("p", 3000, "HTTP listen port")
 	rsaFile := flag.String("i", "../private.pem", "RSA key file")
-	blockchainFile := flag.String("b", "./blockchain", "Blockchain file")
+	blockchainFile := flag.String("b", "./blockchain.bc", "Blockchain file")
 	flag.Parse()
 
 	// rsa key
@@ -64,12 +64,14 @@ func main() {
 			log.Fatalf("given p2p port could not be parsed as int: %v: %v", p2pPort, err)
 		}
 		// Handshake protocol: Connect and get dial response
+		selfPeer := &c.Peer{Address: fmt.Sprintf("ws://localhost:%d/ws", httpPort)}
 		addr := fmt.Sprintf("ws://localhost:%d/ws", p2pPort)
 		log.Printf("Connecting to %s", addr)
-		dialResponse, err := c.Connect(addr)
+		conn, dialResponse, err := c.Connect(addr, selfPeer)
 		if err != nil {
 			log.Printf("disconnected from %s : %v", addr, err)
 		}
+		log.Printf("DIALRESPONSE NETWORK %#v ", dialResponse.Network)
 		consensus = dialResponse.Consensus
 		network = dialResponse.Network
 		blockchain = new(core.Blockchain)
@@ -79,10 +81,21 @@ func main() {
 			log.Printf("could not load blockchain stored at %s: %v", *blockchainFile, err)
 		}
 		blockchain = blockchain.Fetch(dialResponse.Blockchain)
+		// Listen and serve peers
+		for _, peer := range network.Peers {
+			conn, _, err := c.Connect(peer.Address, selfPeer)
+			if err != nil {
+				log.Printf("disconnected from %s : %v", addr, err)
+			}
+			peer.Conn = conn
+			go ListenAndServe(peer)
+		}
 		// Register this peer because it is not self registered in its network
-		peer := &c.Peer{Conn: dialResponse.Conn}
+		peer := &c.Peer{Address: addr, Conn: conn}
 		network.Add(peer)
 	}
+	// current working block
+	block = blockchain.GetLastBlock()
 
 	// Serve HTTP
 	http.HandleFunc("/blockchain", handleBlockchain)
@@ -93,15 +106,8 @@ func main() {
 		http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil)
 	}()
 
-	go func() {
-		// Listen and serve peers
-		for _, peer := range network.Peers {
-			go ListenAndServe(peer)
-		}
-	}()
-
 	// mine
-	go Mine()
+	// go Mine()
 
 	// Capture SIGTERM
 	signalChan := make(chan os.Signal, 1)
@@ -130,11 +136,11 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("%#v", t.Transaction)
-	if block.IsTransactionValid(t.Transaction) {
-		pendingTransactions = append(pendingTransactions, t.Transaction)
-		msg, _ := json.Marshal(t)
-		network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
-	}
+	// if block.IsTransactionValid(t.Transaction) {
+	pendingTransactions = append(pendingTransactions, t.Transaction)
+	msg, _ := json.Marshal(t)
+	network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
+	// }
 }
 
 func handleBlockchain(w http.ResponseWriter, r *http.Request) {
@@ -145,35 +151,39 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	// Upgrade initial GET request to a websocket
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatal("could not upgrade websocket", err)
+		log.Println("could not upgrade websocket", err)
 	}
 	defer conn.Close()
-
+	// read peer
+	peer := &c.Peer{}
+	err = conn.ReadJSON(r)
+	if err != nil {
+		log.Println("could not read peer connection", err)
+	}
+	// Add new peer to network
 	dialResponse := &c.DialResponse{Consensus: consensus, Network: network, Blockchain: blockchain}
 	// send dial response
 	conn.WriteJSON(dialResponse)
 	// Register our new peer
-	peer := &c.Peer{Conn: conn}
 	network.Add(peer)
 	// Serve this new peer
-	go ListenAndServe(peer)
+	ListenAndServe(peer)
 }
 
 // Mine work on proof-of-work on the last block of its blockchain
 func Mine() {
-	block = blockchain.GetLastBlock()
 	for {
 		// Proof of Work
 		for !crypto.MatchHash(block.ToHash(), consensus.Difficulty) {
 			block = blockchain.Mine(consensus.Difficulty)
 		}
-		log.Println("BLOCK MINED !")
 		// Present block
-		log.Println("broadcasting to ", network)
 		msg, _ := json.Marshal(&c.BlockMessage{Block: block, From: localID, Signature: false})
 		network.Broadcast(c.Message{Type: c.Block, Message: msg})
+		log.Println("BLOCK MINED !")
 		// aggregate peers responses
 		responses := network.Aggregate()
+		log.Println("responses aggregate ", responses)
 		// check validity
 		valid := consensus.Validate(block, responses)
 		if valid {
@@ -191,6 +201,7 @@ func Mine() {
 	}
 }
 
+// ListenAndServe listen and serve messages from peer
 func ListenAndServe(peer *c.Peer) {
 	log.Println("listening to ", peer)
 	for {
@@ -198,24 +209,17 @@ func ListenAndServe(peer *c.Peer) {
 		// Read in a new message as JSON and map it to a Message object
 		err := peer.Conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("error: %v", err)
-			break
+			log.Printf("error read Message on conn %#v: %v", peer, err)
 		}
 		// handling message
 		switch msg.Type {
-		case c.PeerStatus:
-			log.Println("msg PeerStatus")
-			var peerStatusMsg *c.PeerStatusMessage
-			err = json.Unmarshal(msg.Message, &peerStatusMsg)
-			network.Add(peerStatusMsg.Peer)
-			go ListenAndServe(peerStatusMsg.Peer)
 		case c.Transaction:
 			log.Println("msg Transaction")
 			var transactionMsg *c.TransactionMessage
 			err = json.Unmarshal(msg.Message, &transactionMsg)
-			if block.IsTransactionValid(transactionMsg.Transaction) {
-				pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
-			}
+			// if block.IsTransactionValid(transactionMsg.Transaction) {
+			pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
+			// }
 		case c.Block:
 			log.Println("msg Block")
 			var blockMsg *c.BlockMessage
