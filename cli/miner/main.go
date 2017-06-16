@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 
 	"github.com/gorilla/websocket"
 
@@ -21,11 +22,12 @@ import (
 
 var (
 	pendingTransactions = make([]*core.Transaction, 0)
+	mutex               = &sync.Mutex{}
 	consensus           *c.Consensus
 	network             *c.Network
 	block               *core.Block      // pending block
 	blockchain          *core.Blockchain // blockchain
-	localID             string           // id of this peer, used to grant PoW
+	localID             string           // id of this peer, used to grant PoW and authenticate to the network
 )
 
 // Configure the upgrader
@@ -71,7 +73,6 @@ func main() {
 		if err != nil {
 			log.Printf("disconnected from %s : %v", addr, err)
 		}
-		log.Printf("DIALRESPONSE NETWORK %#v ", dialResponse.Network)
 		consensus = dialResponse.Consensus
 		network = dialResponse.Network
 		blockchain = new(core.Blockchain)
@@ -108,7 +109,7 @@ func main() {
 	}()
 
 	// mine
-	// go Mine()
+	go Mine()
 
 	// Capture SIGTERM
 	signalChan := make(chan os.Signal, 1)
@@ -191,8 +192,11 @@ func Mine() {
 	for {
 		// Proof of Work
 		for !crypto.MatchHash(block.ToHash(), consensus.Difficulty) {
+			mutex.Lock()
 			block = blockchain.Mine(consensus.Difficulty)
+			mutex.Unlock()
 		}
+		mutex.Lock()
 		// Present block
 		msg, _ := json.Marshal(&c.BlockMessage{Block: block, From: localID, Signature: false})
 		network.Broadcast(c.Message{Type: c.Block, Message: msg})
@@ -214,6 +218,7 @@ func Mine() {
 		block = blockchain.GenNext(pendingTransactions)
 		// flush pending transactions
 		pendingTransactions = make([]*core.Transaction, 0)
+		mutex.Unlock()
 	}
 }
 
@@ -239,14 +244,15 @@ func ListenAndServe(conn *websocket.Conn) {
 			log.Println("msg Block")
 			var blockMsg *c.BlockMessage
 			err = json.Unmarshal(msg.Message, &blockMsg)
-			if blockchain.IsBlockValid(blockMsg.Block) {
-				msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Signature: true})
-				conn.WriteJSON(c.Message{Type: c.Block, Message: msg})
-			}
+			// if blockchain.IsBlockValid(blockMsg.Block) {
+			msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Signature: true})
+			conn.WriteJSON(c.Message{Type: c.Block, Message: msg})
+			// }
 		case c.BlockPoW:
 			log.Println("msg BlockPoW")
 			var blockPoWMsg *c.BlockPoWMessage
 			err = json.Unmarshal(msg.Message, &blockPoWMsg)
+			mutex.Lock()
 			blockchain.AppendBlock(block)
 			// update next tick
 			consensus.UpdateNext()
@@ -254,6 +260,7 @@ func ListenAndServe(conn *websocket.Conn) {
 			block = blockchain.GenNext(pendingTransactions)
 			// flush pending transactions
 			pendingTransactions = make([]*core.Transaction, 0)
+			mutex.Unlock()
 		}
 	}
 }

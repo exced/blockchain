@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"crypto/rsa"
+
 	"github.com/exced/blockchain/consensus"
 	"github.com/exced/blockchain/core"
 	"github.com/exced/blockchain/crypto"
@@ -30,23 +32,33 @@ func main() {
 	switch flag.Arg(0) {
 	case "gen":
 		crypto.GenRsaFile(*rsaGenFilePath)
-	case "send":
+	case "withdraw":
 		if flag.NArg() < 3 {
-			log.Fatal("usage:\n\t send to amount\n")
+			log.Fatal("usage:\n\t withdraw to amount\n")
 		}
 		// args
 		amount, err := strconv.ParseInt(flag.Arg(2), 10, 64)
 		if err != nil {
 			log.Fatalf("given amount could not be parsed as int: %v: %v", amount, err)
 		}
-		send(*rsaFilePath, *httpPort, flag.Arg(1), amount)
+		withdraw(*httpPort, *rsaFilePath, flag.Arg(1), amount)
+	case "deposit":
+		if flag.NArg() < 3 {
+			log.Fatal("usage:\n\t deposit from amount\n")
+		}
+		// args
+		amount, err := strconv.ParseInt(flag.Arg(2), 10, 64)
+		if err != nil {
+			log.Fatalf("given amount could not be parsed as int: %v: %v", amount, err)
+		}
+		deposit(*httpPort, *rsaFilePath, flag.Arg(1), amount)
 	default:
 		panic("command does not exist")
 	}
 }
 
-// send cryptocurrency
-func send(rsaFilePath string, httpPort int, to string, amount int64) {
+// deposit cryptocurrency
+func deposit(httpPort int, rsaFilePath string, from string, amount int64) {
 	// rsa key
 	rsaPrivateKey, err := crypto.OpenRsaFile(rsaFilePath)
 	if err != nil {
@@ -58,27 +70,33 @@ func send(rsaFilePath string, httpPort int, to string, amount int64) {
 	hash := sha256.New()
 	io.WriteString(hash, string(fmt.Sprintf("%v", rsaPrivateKey)))
 
-	// transaction
-	transaction := &core.Transaction{From: fmt.Sprintf("%x", hash.Sum(nil)), To: to, Amount: amount}
-
-	// Sign transaction
-	hash = sha256.New()
-	io.WriteString(hash, fmt.Sprintf("%v", transaction))
-	sig, err := crypto.Sign(hash.Sum(nil), rsaPrivateKey)
-	if err != nil {
-		log.Fatalf("failed to sign hash %s: %v", hash.Sum(nil), err)
-	}
-
-	// prepare transaction message
-	transactionMessage := &consensus.TransactionMessage{
-		Signature:    sig,
-		Hash:         hash.Sum(nil),
-		RsaPublicKey: rsaPublicKey,
-		Transaction:  transaction,
-	}
-
-	// send : HTTP POST
 	addr := fmt.Sprintf("http://localhost:%d/send", httpPort)
+	send(addr, from, fmt.Sprintf("%x", hash.Sum(nil)), amount, rsaPrivateKey, rsaPublicKey)
+}
+
+// withdraw cryptocurrency
+func withdraw(httpPort int, rsaFilePath string, to string, amount int64) {
+	// rsa key
+	rsaPrivateKey, err := crypto.OpenRsaFile(rsaFilePath)
+	if err != nil {
+		log.Fatal("could not open rsa file", err)
+	}
+	rsaPublicKey := &rsaPrivateKey.PublicKey
+
+	// hash private key to get id
+	hash := sha256.New()
+	io.WriteString(hash, string(fmt.Sprintf("%v", rsaPrivateKey)))
+
+	addr := fmt.Sprintf("http://localhost:%d/send", httpPort)
+	send(addr, fmt.Sprintf("%x", hash.Sum(nil)), to, amount, rsaPrivateKey, rsaPublicKey)
+}
+
+func send(addr, from, to string, amount int64, rsaPrivateKey *rsa.PrivateKey, rsaPublicKey *rsa.PublicKey) {
+	// transaction
+	transaction := &core.Transaction{From: from, To: to, Amount: amount}
+	transactionMessage := consensus.NewTransactionMessage(transaction, rsaPrivateKey, rsaPublicKey)
+
+	// HTTP POST
 	b := new(bytes.Buffer)
 	json.NewEncoder(b).Encode(transactionMessage)
 	resp, err := http.Post(addr, "application/json; charset=utf-8", b)

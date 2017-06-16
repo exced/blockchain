@@ -2,9 +2,14 @@ package consensus
 
 import (
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 
 	"github.com/exced/blockchain/core"
+	"github.com/exced/blockchain/crypto"
 )
 
 // MessageType represents an enumeration for peers messages
@@ -49,4 +54,23 @@ type BlockPoWMessage struct {
 	Block      *core.Block `json:"block"`      // mined block
 	From       string      `json:"from"`       // from ID to know who rewards
 	Signatures []*Message  `json:"signatures"` // signature of peer who validated this block
+}
+
+// NewTransactionMessage returns TransactionMessage by signing given transaction
+func NewTransactionMessage(transaction *core.Transaction, rsaPrivateKey *rsa.PrivateKey, rsaPublicKey *rsa.PublicKey) *TransactionMessage {
+	// Sign transaction
+	hash := sha256.New()
+	io.WriteString(hash, fmt.Sprintf("%v", transaction))
+	sig, err := crypto.Sign(hash.Sum(nil), rsaPrivateKey)
+	if err != nil {
+		log.Fatalf("failed to sign hash %s: %v", hash.Sum(nil), err)
+	}
+
+	// prepare transaction message
+	return &TransactionMessage{
+		Signature:    sig,
+		Hash:         hash.Sum(nil),
+		RsaPublicKey: rsaPublicKey,
+		Transaction:  transaction,
+	}
 }
