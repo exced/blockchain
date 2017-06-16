@@ -12,7 +12,8 @@ type MessageType int
 
 // PeerStatus, Transaction, Block represents Type for corresponding message
 const (
-	Transaction = iota
+	PeerConn = iota
+	Transaction
 	Block
 	BlockPoW
 )
@@ -29,6 +30,11 @@ type TransactionMessage struct {
 	Hash         []byte            `json:"hash"`
 	RsaPublicKey *rsa.PublicKey    `json:"rsapublickey"`
 	Transaction  *core.Transaction `json:"transaction"`
+}
+
+// PeerConnMessage is sent when a peer connect to the network
+type PeerConnMessage struct {
+	Peer *Peer `json:"peer"`
 }
 
 // BlockMessage is sent to show up mined block to consensus

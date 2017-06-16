@@ -1,6 +1,8 @@
 package consensus
 
 import (
+	"encoding/json"
+
 	"github.com/exced/blockchain/core"
 	"github.com/gorilla/websocket"
 )
@@ -18,7 +20,8 @@ func Connect(url string, peer *Peer) (*websocket.Conn, *DialResponse, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	conn.WriteJSON(peer)
+	msg, _ := json.Marshal(&PeerConnMessage{Peer: peer})
+	conn.WriteJSON(Message{Type: PeerConn, Message: msg})
 	r := &DialResponse{}
 	err = conn.ReadJSON(r)
 	if err != nil {
