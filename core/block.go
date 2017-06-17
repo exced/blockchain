@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/exced/blockchain/crypto"
@@ -9,15 +10,17 @@ import (
 
 // Block is the basic component of a blockchain.
 type Block struct {
-	Index        int64          `json:"index"`
-	PreviousHash string         `json:"previousHash"`
-	Timestamp    int64          `json:"timestamp"`
-	Transactions []*Transaction `json:"transactions"`
-	Nonce        int            `json:"nonce"`
-	Hash         string         `json:"hash"`
+	Mutex        *sync.Mutex
+	Index        int64         `json:"index"`
+	PreviousHash string        `json:"previousHash"`
+	Timestamp    int64         `json:"timestamp"`
+	Transactions *Transactions `json:"transactions"`
+	Nonce        int           `json:"nonce"`
+	Hash         string        `json:"hash"`
 }
 
 var genesisBlock = &Block{
+	Mutex:        &sync.Mutex{},
 	Index:        0,
 	PreviousHash: "0",
 	Timestamp:    1496696844,
@@ -36,8 +39,9 @@ func (b *Block) IsValid(pb *Block) bool {
 }
 
 // GenNext creates the next block of receiver block given hashed data.
-func (b *Block) GenNext(transactions []*Transaction) (nb *Block) {
+func (b *Block) GenNext(transactions *Transactions) (nb *Block) {
 	nb = &Block{
+		Mutex:        &sync.Mutex{},
 		Index:        b.Index + 1,
 		PreviousHash: b.Hash,
 		Timestamp:    time.Now().Unix(),
@@ -52,43 +56,4 @@ func (b *Block) GenNext(transactions []*Transaction) (nb *Block) {
 func (b *Block) Mine(difficulty int) *Block {
 	b.Nonce = crypto.RandNonce()
 	return b
-}
-
-// IsTransactionValid tests if given transactions are valid with current transactions chain
-func (b *Block) IsTransactionValid(t *Transaction) bool {
-	balances := make(map[string]int64) // key - amount
-	for _, t := range b.Transactions {
-		// ignore banks
-		if !ExistsBank(t.From) {
-			balances[t.From] -= t.Amount
-		}
-		balances[t.To] += t.Amount
-	}
-	if balances[t.From] < t.Amount {
-		return false
-	}
-	return true
-}
-
-// areTransactionsValid tests if given transactions are valid with current transactions chain
-func (b *Block) areTransactionsValid(transactions []*Transaction) bool {
-	balances := make(map[string]int64) // key - amount
-	for _, t := range b.Transactions {
-		// ignore banks
-		if !ExistsBank(t.From) {
-			balances[t.From] -= t.Amount
-		}
-		balances[t.To] += t.Amount
-	}
-	for _, t := range transactions {
-		// ignore banks
-		if !ExistsBank(t.From) {
-			balances[t.From] -= t.Amount
-		}
-		if balances[t.From] < 0 {
-			return false
-		}
-		balances[t.To] += t.Amount
-	}
-	return true
 }

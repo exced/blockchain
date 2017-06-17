@@ -7,6 +7,59 @@ type Transaction struct {
 	Amount int64  `json:"amount"`
 }
 
+// NewTransaction returns a new Transaction from someone to someone else
 func NewTransaction(from, to string, a int64) *Transaction {
 	return &Transaction{from, to, a}
+}
+
+// Transactions represent a list of transaction.
+// Transactions are received by peers before receiving next valid block.
+// These are flushed and appended to the new next block each time you receive a new valid block.
+type Transactions []*Transaction
+
+// NewTransactions returns an empty list of transaction
+func NewTransactions() *Transactions {
+	return &Transactions{}
+}
+
+// Append add given transaction at the end of received list
+func (ts *Transactions) Append(t *Transaction) {
+	*ts = append(*ts, t)
+}
+
+func (ts *Transactions) IsValid(other *Transaction) bool {
+	balances := make(map[string]int64) // key - amount
+	for _, t := range *ts {
+		// ignore banks
+		if !ExistsBank(t.From) {
+			balances[t.From] -= t.Amount
+		}
+		balances[t.To] += t.Amount
+	}
+	if balances[other.From] < other.Amount {
+		return false
+	}
+	return true
+}
+
+func (ts *Transactions) AreValid(others *Transactions) bool {
+	balances := make(map[string]int64) // key - amount
+	for _, t := range *ts {
+		// ignore banks
+		if !ExistsBank(t.From) {
+			balances[t.From] -= t.Amount
+		}
+		balances[t.To] += t.Amount
+	}
+	for _, t := range *others {
+		// ignore banks
+		if !ExistsBank(t.From) {
+			balances[t.From] -= t.Amount
+		}
+		if balances[t.From] < 0 {
+			return false
+		}
+		balances[t.To] += t.Amount
+	}
+	return true
 }

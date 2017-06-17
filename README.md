@@ -31,6 +31,6 @@ at port 3000 and use "private1.pem" file as its account. This account is needed 
 
 ```bash
 ~miner go run main.go
-~miner go run main.go -p 3001 -b "./blockchain1.bc" 3000
-~miner go run main.go -p 3002 -b "./blockchain2.bc" 3001
+~miner go run main.go -p 3001 -i "./private1.pem" -b "./blockchain1.bc" 3000
+~miner go run main.go -p 3002 -i "./private1.pem" -b "./blockchain2.bc" 3001
 ```

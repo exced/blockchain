@@ -6,19 +6,18 @@ import (
 )
 
 func TestAppendBlock(t *testing.T) {
-	transactions := []*Transaction{
-		&Transaction{From: "0", To: "1", Amount: 5},
-	}
+	transactions := NewTransactions()
+	transactions.Append(&Transaction{From: "0", To: "1", Amount: 5})
 	// case
 	bc1 := NewBlockchain()
 	bc2 := NewBlockchain()
 	b := genesisBlock.GenNext(transactions)
-	*bc2 = append(*bc2, b)
+	bc2.Blocks = append(bc2.Blocks, b)
 	// case
 	bc3 := NewBlockchain()
 	bc4 := NewBlockchain()
 	b2 := bc3.GenNext(transactions)
-	*bc4 = append(*bc4, b2)
+	bc4.Blocks = append(bc4.Blocks, b2)
 	cases := []struct {
 		blockchain *Blockchain
 		block      *Block
@@ -36,9 +35,8 @@ func TestAppendBlock(t *testing.T) {
 }
 
 func TestIsValid(t *testing.T) {
-	transactions := []*Transaction{
-		&Transaction{From: "0", To: "1", Amount: 5},
-	}
+	transactions := NewTransactions()
+	transactions.Append(&Transaction{From: "0", To: "1", Amount: 5})
 	bc1 := NewBlockchain()
 	bc2 := NewBlockchain()
 	bc2.AppendBlock(bc2.GenNext(transactions))
@@ -65,9 +63,8 @@ func TestIsValid(t *testing.T) {
 func TestFetch(t *testing.T) {
 	bc1 := NewBlockchain()
 	bc2 := NewBlockchain()
-	transactions := []*Transaction{
-		&Transaction{From: "0", To: "1", Amount: 5},
-	}
+	transactions := NewTransactions()
+	transactions.Append(&Transaction{From: "0", To: "1", Amount: 5})
 	bc2.AppendBlock(bc2.GenNext(transactions))
 	cases := []struct {
 		blockchain *Blockchain

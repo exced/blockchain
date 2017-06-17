@@ -70,7 +70,7 @@ func deposit(httpPort int, rsaFilePath string, from string, amount int64) {
 	hash := sha256.New()
 	io.WriteString(hash, string(fmt.Sprintf("%v", rsaPrivateKey)))
 
-	addr := fmt.Sprintf("http://localhost:%d/deposit", httpPort)
+	addr := fmt.Sprintf("http://localhost:%d/transaction", httpPort)
 	send(addr, from, fmt.Sprintf("%x", hash.Sum(nil)), amount, rsaPrivateKey, rsaPublicKey)
 }
 
@@ -87,7 +87,7 @@ func withdraw(httpPort int, rsaFilePath string, to string, amount int64) {
 	hash := sha256.New()
 	io.WriteString(hash, string(fmt.Sprintf("%v", rsaPrivateKey)))
 
-	addr := fmt.Sprintf("http://localhost:%d/withdraw", httpPort)
+	addr := fmt.Sprintf("http://localhost:%d/transaction", httpPort)
 	send(addr, fmt.Sprintf("%x", hash.Sum(nil)), to, amount, rsaPrivateKey, rsaPublicKey)
 }
 

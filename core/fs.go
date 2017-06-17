@@ -31,7 +31,7 @@ func Load(path string, object interface{}) error {
 	return err
 }
 
-// Check
+// Check check if file is correctly saved
 func Check(e error) {
 	if e != nil {
 		_, file, line, _ := runtime.Caller(1)

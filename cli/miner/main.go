@@ -44,6 +44,7 @@ func main() {
 	if err != nil {
 		log.Fatal("could not open rsa file", err)
 	}
+	log.Printf(localID)
 
 	// Genesis Peer
 	if flag.NArg() < 1 {
@@ -54,7 +55,7 @@ func main() {
 		// args consensus port
 		p2pPort, err := strconv.ParseInt(flag.Arg(0), 10, 64)
 		if err != nil {
-			log.Fatalf("given p2p port could not be parsed as int: %v: %v", p2pPort, err)
+			log.Fatalf("p2p port could not be parsed as int: %v: %v", p2pPort, err)
 		}
 		// Handshake protocol: Connect and get dial response
 		selfPeer := &c.Peer{Address: fmt.Sprintf("ws://localhost:%d/ws", *httpPort)}
@@ -96,8 +97,7 @@ func main() {
 
 	// Serve HTTP
 	http.HandleFunc("/blockchain", handleBlockchain)
-	http.HandleFunc("/withdraw", handleWithdraw)
-	http.HandleFunc("/deposit", handleDeposit)
+	http.HandleFunc("/transaction", handleTransaction)
 	http.HandleFunc("/ws", handleConnection)
 	go func() {
 		log.Printf("HTTP listening to port %d", *httpPort)
@@ -111,8 +111,8 @@ func main() {
 	core.SaveOnInterrupt(*blockchainFile, blockchain)
 }
 
-// handleWithdraw broadcast given transaction from client to network
-func handleWithdraw(w http.ResponseWriter, r *http.Request) {
+// handleTransaction broadcast given transaction from client to network
+func handleTransaction(w http.ResponseWriter, r *http.Request) {
 	var t c.TransactionMessage
 	err := json.NewDecoder(r.Body).Decode(&t)
 	if err != nil {
@@ -132,27 +132,6 @@ func handleWithdraw(w http.ResponseWriter, r *http.Request) {
 		log.Println("Broadcast transaction to ", network)
 		network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
 	}
-}
-
-// handleDeposit broadcast given transaction from client to network
-func handleDeposit(w http.ResponseWriter, r *http.Request) {
-	var t c.TransactionMessage
-	err := json.NewDecoder(r.Body).Decode(&t)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		return
-	}
-	// verify
-	err = crypto.Verify(t.Signature, t.Hash, t.RsaPublicKey)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		return
-	}
-	log.Printf("%#v", t.Transaction)
-	pendingTransactions = append(pendingTransactions, t.Transaction)
-	msg, _ := json.Marshal(t)
-	log.Println("Broadcast transaction to ", network)
-	network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
 }
 
 // handleBlockchain retrieves a copy of current blockchain
