@@ -58,7 +58,10 @@ func (b *Block) Mine(difficulty int) *Block {
 func (b *Block) IsTransactionValid(t *Transaction) bool {
 	balances := make(map[string]int64) // key - amount
 	for _, t := range b.Transactions {
-		balances[t.From] -= t.Amount
+		// ignore banks
+		if !ExistsBank(t.From) {
+			balances[t.From] -= t.Amount
+		}
 		balances[t.To] += t.Amount
 	}
 	if balances[t.From] < t.Amount {
@@ -71,11 +74,17 @@ func (b *Block) IsTransactionValid(t *Transaction) bool {
 func (b *Block) areTransactionsValid(transactions []*Transaction) bool {
 	balances := make(map[string]int64) // key - amount
 	for _, t := range b.Transactions {
-		balances[t.From] -= t.Amount
+		// ignore banks
+		if !ExistsBank(t.From) {
+			balances[t.From] -= t.Amount
+		}
 		balances[t.To] += t.Amount
 	}
 	for _, t := range transactions {
-		balances[t.From] -= t.Amount
+		// ignore banks
+		if !ExistsBank(t.From) {
+			balances[t.From] -= t.Amount
+		}
 		if balances[t.From] < 0 {
 			return false
 		}

@@ -4,8 +4,11 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
+	"io"
 	"io/ioutil"
 )
 
@@ -31,6 +34,7 @@ func GenRsaFile(path string) error {
 	return ioutil.WriteFile(path, pemdata, 0644)
 }
 
+// OpenRsaFile open and retrieve RSA private key stored at given path
 func OpenRsaFile(path string) (*rsa.PrivateKey, error) {
 	f, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -38,4 +42,19 @@ func OpenRsaFile(path string) (*rsa.PrivateKey, error) {
 	}
 	block, _ := pem.Decode(f)
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
+}
+
+// RsaID open rsa file at given path and retrieves owner ID
+func RsaID(path string) (string, error) {
+	// rsa key
+	rsaPrivateKey, err := OpenRsaFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	// hash private key to get id
+	hash := sha256.New()
+	io.WriteString(hash, fmt.Sprintf("%v", rsaPrivateKey))
+	localID := fmt.Sprintf("%x", hash.Sum(nil))
+	return localID, nil
 }

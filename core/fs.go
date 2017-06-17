@@ -3,7 +3,9 @@ package core
 import (
 	"encoding/gob"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
 	"runtime"
 )
 
@@ -36,4 +38,19 @@ func Check(e error) {
 		fmt.Println(line, "\t", file, "\n", e)
 		os.Exit(1)
 	}
+}
+
+// SaveOnInterrupt captures SIGTERM and save file before exiting the program
+func SaveOnInterrupt(path string, object interface{}) {
+	// Capture SIGTERM
+	signalChan := make(chan os.Signal, 1)
+	cleanupDone := make(chan bool)
+	signal.Notify(signalChan, os.Interrupt)
+	go func() {
+		<-signalChan
+		log.Printf("Saving file at %s", path)
+		Save(path, object)
+		cleanupDone <- true
+	}()
+	<-cleanupDone
 }

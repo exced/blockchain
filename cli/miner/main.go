@@ -1,15 +1,11 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"strconv"
 	"sync"
 
@@ -43,16 +39,11 @@ func main() {
 	blockchainFile := flag.String("b", "./blockchain.bc", "Blockchain file")
 	flag.Parse()
 
-	// rsa key
-	rsaPrivateKey, err := crypto.OpenRsaFile(*rsaFile)
+	// miner ID
+	localID, err := crypto.RsaID(*rsaFile)
 	if err != nil {
 		log.Fatal("could not open rsa file", err)
 	}
-
-	// hash private key to get id
-	hash := sha256.New()
-	io.WriteString(hash, fmt.Sprintf("%v", rsaPrivateKey))
-	localID = fmt.Sprintf("%x", hash.Sum(nil))
 
 	// Genesis Peer
 	if flag.NArg() < 1 {
@@ -75,6 +66,8 @@ func main() {
 		}
 		consensus = dialResponse.Consensus
 		network = dialResponse.Network
+
+		// load blockchain
 		blockchain = new(core.Blockchain)
 		err = core.Load(*blockchainFile, blockchain)
 		if err != nil {
@@ -82,6 +75,7 @@ func main() {
 			log.Printf("could not load blockchain stored at %s: %v", *blockchainFile, err)
 		}
 		blockchain = blockchain.Fetch(dialResponse.Blockchain)
+
 		// Listen and serve peers
 		for _, peer := range network.Peers {
 			conn, _, err := c.Connect(peer.Address, selfPeer)
@@ -91,17 +85,19 @@ func main() {
 			peer.Conn = conn
 			go ListenAndServe(conn)
 		}
-		peer := &c.Peer{Address: addr, Conn: conn}
 		// Register this peer because it is not self registered in its network
+		peer := &c.Peer{Address: addr, Conn: conn}
 		network.Add(peer)
 		go ListenAndServe(peer.Conn)
 	}
+
 	// current working block
 	block = blockchain.GetLastBlock()
 
 	// Serve HTTP
 	http.HandleFunc("/blockchain", handleBlockchain)
-	http.HandleFunc("/send", handleSend)
+	http.HandleFunc("/withdraw", handleWithdraw)
+	http.HandleFunc("/deposit", handleDeposit)
 	http.HandleFunc("/ws", handleConnection)
 	go func() {
 		log.Printf("HTTP listening to port %d", *httpPort)
@@ -111,21 +107,12 @@ func main() {
 	// mine
 	go Mine()
 
-	// Capture SIGTERM
-	signalChan := make(chan os.Signal, 1)
-	cleanupDone := make(chan bool)
-	signal.Notify(signalChan, os.Interrupt)
-	go func() {
-		<-signalChan
-		log.Printf("Saving blockchain locally at %s", *blockchainFile)
-		core.Save(*blockchainFile, blockchain)
-		cleanupDone <- true
-	}()
-	<-cleanupDone
+	// save blockchain if interrupt signal is captured
+	core.SaveOnInterrupt(*blockchainFile, blockchain)
 }
 
-// handleSend broadcast given transaction from client to network
-func handleSend(w http.ResponseWriter, r *http.Request) {
+// handleWithdraw broadcast given transaction from client to network
+func handleWithdraw(w http.ResponseWriter, r *http.Request) {
 	var t c.TransactionMessage
 	err := json.NewDecoder(r.Body).Decode(&t)
 	if err != nil {
@@ -139,12 +126,33 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("%#v", t.Transaction)
-	// if block.IsTransactionValid(t.Transaction) {
+	if block.IsTransactionValid(t.Transaction) {
+		pendingTransactions = append(pendingTransactions, t.Transaction)
+		msg, _ := json.Marshal(t)
+		log.Println("Broadcast transaction to ", network)
+		network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
+	}
+}
+
+// handleDeposit broadcast given transaction from client to network
+func handleDeposit(w http.ResponseWriter, r *http.Request) {
+	var t c.TransactionMessage
+	err := json.NewDecoder(r.Body).Decode(&t)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	// verify
+	err = crypto.Verify(t.Signature, t.Hash, t.RsaPublicKey)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	log.Printf("%#v", t.Transaction)
 	pendingTransactions = append(pendingTransactions, t.Transaction)
 	msg, _ := json.Marshal(t)
 	log.Println("Broadcast transaction to ", network)
 	network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
-	// }
 }
 
 // handleBlockchain retrieves a copy of current blockchain
@@ -237,17 +245,17 @@ func ListenAndServe(conn *websocket.Conn) {
 			log.Println("msg Transaction")
 			var transactionMsg *c.TransactionMessage
 			err = json.Unmarshal(msg.Message, &transactionMsg)
-			// if block.IsTransactionValid(transactionMsg.Transaction) {
-			pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
-			// }
+			if block.IsTransactionValid(transactionMsg.Transaction) {
+				pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
+			}
 		case c.Block:
 			log.Println("msg Block")
 			var blockMsg *c.BlockMessage
 			err = json.Unmarshal(msg.Message, &blockMsg)
-			// if blockchain.IsBlockValid(blockMsg.Block) {
-			msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Signature: true})
-			conn.WriteJSON(c.Message{Type: c.Block, Message: msg})
-			// }
+			if blockchain.IsBlockValid(blockMsg.Block) {
+				msg, _ := json.Marshal(&c.BlockMessage{Block: blockMsg.Block, From: blockMsg.From, Signature: true})
+				conn.WriteJSON(c.Message{Type: c.Block, Message: msg})
+			}
 		case c.BlockPoW:
 			log.Println("msg BlockPoW")
 			var blockPoWMsg *c.BlockPoWMessage

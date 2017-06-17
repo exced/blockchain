@@ -48,6 +48,7 @@ func TestIsTransactionValid(t *testing.T) {
 		{b, &Transaction{From: "0", To: "1", Amount: 5}, false},
 		{b, &Transaction{From: "1", To: "3", Amount: 15}, true},
 		{b, &Transaction{From: "1", To: "3", Amount: 20}, false},
+		{b, &Transaction{From: "HSBC", To: "4", Amount: 100}, false},
 	}
 	for _, c := range cases {
 		got := c.block.IsTransactionValid(c.transaction)

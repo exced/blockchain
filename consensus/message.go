@@ -17,7 +17,7 @@ type MessageType int
 
 // PeerStatus, Transaction, Block represents Type for corresponding message
 const (
-	PeerConn = iota
+	PeerConn MessageType = iota
 	Transaction
 	Block
 	BlockPoW
