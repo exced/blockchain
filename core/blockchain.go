@@ -2,6 +2,8 @@ package core
 
 import (
 	"sync"
+
+	"github.com/exced/blockchain/crypto"
 )
 
 // Blockchain is a list of blocks.
@@ -66,14 +68,19 @@ func (bc *Blockchain) IsBlockValid(b *Block) bool {
 	return b.IsValid(bc.GetLastBlock())
 }
 
-// Mine looks for a nonce for the last block of received blockchain to satisfy given difficulty
-func (bc *Blockchain) Mine(difficulty int) *Block {
-	return bc.GetLastBlock().Mine(difficulty)
+// Link given block to last block of received blockchain : set the previousHash field to previous Hash
+func (bc *Blockchain) Link(b *Block) {
+	b.Link(bc.GetLastBlock())
+}
+
+// Mine looks for a nonce for the last block of received blockchain
+func (bc *Blockchain) Mine() {
+	bc.GetLastBlock().Mine()
 }
 
 // GenNext returns the next block to work on for miners.
-func (bc *Blockchain) GenNext(transactions *Transactions) *Block {
-	return bc.GetLastBlock().GenNext(transactions)
+func (bc *Blockchain) GenNext(t *Transactions) *Block {
+	return bc.GetLastBlock().GenNext(t)
 }
 
 // Fetch returns a blockchain fetching our received blockchain and other given blockchain. Does nothing
@@ -91,4 +98,9 @@ func (bc *Blockchain) Fetch(other *Blockchain) *Blockchain {
 		}
 	}
 	return other
+}
+
+// PoW returns true if Proof of Work is done for received blockchain and given difficulty.
+func (bc *Blockchain) PoW(difficulty int) bool {
+	return crypto.MatchHash(bc.GetLastBlock().ToHash(), difficulty)
 }

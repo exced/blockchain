@@ -24,8 +24,9 @@ var genesisBlock = &Block{
 	Index:        0,
 	PreviousHash: "0",
 	Timestamp:    1496696844,
+	Transactions: NewTransactions(),
 	Nonce:        0,
-	Hash:         "bd125513b6f734f19d169f5a95e35765ccc5c438d937f728e5febd2322e3ddc4",
+	Hash:         "c02c463d7c5559d90a6b90facf87de3f451aed75d26e8dadc778d4e140f59beb",
 }
 
 // ToHash hashes receiver block.
@@ -39,21 +40,25 @@ func (b *Block) IsValid(pb *Block) bool {
 }
 
 // GenNext creates the next block of receiver block given hashed data.
-func (b *Block) GenNext(transactions *Transactions) (nb *Block) {
+func (b *Block) GenNext(t *Transactions) (nb *Block) {
 	nb = &Block{
 		Mutex:        &sync.Mutex{},
 		Index:        b.Index + 1,
 		PreviousHash: b.Hash,
 		Timestamp:    time.Now().Unix(),
-		Transactions: transactions,
+		Transactions: t,
 		Nonce:        crypto.RandNonce(),
 	}
 	nb.Hash = nb.ToHash()
 	return nb
 }
 
-// Mine looks for a nonce to satisfy given difficulty
-func (b *Block) Mine(difficulty int) *Block {
+// Link received block to given previous block : set the previousHash field to previous Hash
+func (b *Block) Link(pb *Block) {
+	b.PreviousHash = pb.Hash
+}
+
+// Mine generates a rand nonce for the block
+func (b *Block) Mine() {
 	b.Nonce = crypto.RandNonce()
-	return b
 }

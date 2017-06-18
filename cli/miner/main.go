@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/gorilla/websocket"
 
@@ -17,13 +16,12 @@ import (
 )
 
 var (
-	pendingTransactions = make([]*core.Transaction, 0)
-	mutex               = &sync.Mutex{}
-	consensus           *c.Consensus
-	network             *c.Network
-	block               *core.Block      // pending block
-	blockchain          *core.Blockchain // blockchain
-	localID             string           // id of this peer, used to grant PoW and authenticate to the network
+	consensus    *c.Consensus
+	network      *c.Network
+	transactions *core.Transactions // pending transactions
+	block        *core.Block        // pending block. It will be linked to the blockchain when PoW done
+	blockchain   *core.Blockchain   // blockchain
+	localID      string             // id of this peer, used to grant PoW and authenticate to the network
 )
 
 // Configure the upgrader
@@ -92,8 +90,11 @@ func main() {
 		go ListenAndServe(peer.Conn)
 	}
 
+	// current working transactions
+	transactions = blockchain.GetLastBlock().Transactions
+
 	// current working block
-	block = blockchain.GetLastBlock()
+	block = blockchain.GetLastBlock().GenNext(transactions)
 
 	// Serve HTTP
 	http.HandleFunc("/blockchain", handleBlockchain)
@@ -126,12 +127,10 @@ func handleTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("%#v", t.Transaction)
-	if block.IsTransactionValid(t.Transaction) {
-		pendingTransactions = append(pendingTransactions, t.Transaction)
-		msg, _ := json.Marshal(t)
-		log.Println("Broadcast transaction to ", network)
-		network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
-	}
+	transactions.Append(t.Transaction)
+	msg, _ := json.Marshal(t)
+	log.Println("Broadcast transaction to ", network)
+	network.Broadcast(c.Message{Type: c.Transaction, Message: msg})
 }
 
 // handleBlockchain retrieves a copy of current blockchain
@@ -178,12 +177,9 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 func Mine() {
 	for {
 		// Proof of Work
-		for !crypto.MatchHash(block.ToHash(), consensus.Difficulty) {
-			mutex.Lock()
-			block = blockchain.Mine(consensus.Difficulty)
-			mutex.Unlock()
+		for !blockchain.PoW(consensus.Difficulty) {
+			blockchain.Mine()
 		}
-		mutex.Lock()
 		// Present block
 		msg, _ := json.Marshal(&c.BlockMessage{Block: block, From: localID, Signature: false})
 		network.Broadcast(c.Message{Type: c.Block, Message: msg})
@@ -192,8 +188,7 @@ func Mine() {
 		responses := network.Aggregate()
 		log.Println("responses aggregate ", responses)
 		// check validity
-		valid := consensus.Validate(block, responses)
-		if valid {
+		if consensus.Validate(block, responses) {
 			blockchain.AppendBlock(block)
 			msg, _ := json.Marshal(&c.BlockPoWMessage{Block: block, From: localID, Signatures: responses})
 			network.Broadcast(c.Message{Type: c.BlockPoW, Message: msg})
@@ -202,10 +197,7 @@ func Mine() {
 		// update next tick
 		consensus.UpdateNext()
 		// work on "new clean" block: link + transactions history
-		block = blockchain.GenNext(pendingTransactions)
-		// flush pending transactions
-		pendingTransactions = make([]*core.Transaction, 0)
-		mutex.Unlock()
+		block = blockchain.GenNext(transactions)
 	}
 }
 
@@ -224,9 +216,7 @@ func ListenAndServe(conn *websocket.Conn) {
 			log.Println("msg Transaction")
 			var transactionMsg *c.TransactionMessage
 			err = json.Unmarshal(msg.Message, &transactionMsg)
-			if block.IsTransactionValid(transactionMsg.Transaction) {
-				pendingTransactions = append(pendingTransactions, transactionMsg.Transaction)
-			}
+			transactions.Append(transactionMsg.Transaction)
 		case c.Block:
 			log.Println("msg Block")
 			var blockMsg *c.BlockMessage
@@ -239,15 +229,11 @@ func ListenAndServe(conn *websocket.Conn) {
 			log.Println("msg BlockPoW")
 			var blockPoWMsg *c.BlockPoWMessage
 			err = json.Unmarshal(msg.Message, &blockPoWMsg)
-			mutex.Lock()
 			blockchain.AppendBlock(block)
 			// update next tick
 			consensus.UpdateNext()
 			// work on "new clean" block: link + transactions history
-			block = blockchain.GenNext(pendingTransactions)
-			// flush pending transactions
-			pendingTransactions = make([]*core.Transaction, 0)
-			mutex.Unlock()
+			block = blockchain.GenNext(transactions)
 		}
 	}
 }
