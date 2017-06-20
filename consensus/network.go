@@ -1,6 +1,11 @@
 package consensus
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/exced/blockchain/core"
+)
 
 // Network is a set of Peer that listen and serves each other
 type Network struct {
@@ -37,9 +42,8 @@ func (n *Network) Aggregate() []*Message {
 	return a
 }
 
-// Broadcast given Message to all peers
+// Broadcast given Message to all peers in the network
 func (n *Network) Broadcast(msg Message) {
-	// Send it out to every peer that is currently connected
 	for i, peer := range n.Peers {
 		err := peer.Conn.WriteJSON(msg)
 		if err != nil {
@@ -47,4 +51,24 @@ func (n *Network) Broadcast(msg Message) {
 			n.RemoveByIndex(i)
 		}
 	}
+}
+
+// Validate given block according to given responses and received consensus
+func (n *Network) Validate(block *core.Block, responses []*Message) bool {
+	noise := 0
+	valid := 0
+	for _, resp := range responses {
+		if resp.Type == Block {
+			var blockMsg *BlockMessage
+			err := json.Unmarshal(resp.Message, &blockMsg)
+			if (err != nil) || (blockMsg.Block != block) {
+				noise++
+				continue
+			}
+			if blockMsg.Signature {
+				valid++
+			}
+		}
+	}
+	return (2*valid > len(responses)-noise)
 }

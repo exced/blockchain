@@ -21,12 +21,18 @@ const (
 	Transaction
 	Block
 	BlockPoW
+	JSONResponse
 )
 
 // Message represents msg communication between peers
 type Message struct {
 	Type    MessageType     `json:"type"`
 	Message json.RawMessage `json:"message"`
+}
+
+// JSONResponseMessage defines a http client JSON response
+type JSONResponseMessage struct {
+	Data interface{} `json:"data"`
 }
 
 // TransactionMessage is sent when a client do a send request
