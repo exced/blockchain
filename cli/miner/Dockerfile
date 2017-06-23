@@ -2,6 +2,5 @@ FROM golang:1.8
 ADD app /app
 
 EXPOSE 3000
-EXPOSE 6000
 
 ENTRYPOINT ["/app"]

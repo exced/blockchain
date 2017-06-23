@@ -44,7 +44,9 @@ func (bc *Blockchain) Append(tail *Blockchain) {
 
 // AppendBlock append a new block at the end of the blockchain
 func (bc *Blockchain) AppendBlock(b *Block) {
+	bc.Mutex.Lock()
 	bc.Blocks = append(bc.Blocks, b)
+	bc.Mutex.Unlock()
 }
 
 // IsValid tests if all blocks of the blockchain are valid
@@ -75,12 +77,17 @@ func (bc *Blockchain) Link(b *Block) {
 
 // Mine looks for a nonce for the last block of received blockchain
 func (bc *Blockchain) Mine() {
+	bc.Mutex.Lock()
 	bc.GetLastBlock().Mine()
+	bc.Mutex.Unlock()
 }
 
 // GenNext returns the next block to work on for miners.
 func (bc *Blockchain) GenNext(t *Transactions) *Block {
-	return bc.GetLastBlock().GenNext(t)
+	bc.Mutex.Lock()
+	res := bc.GetLastBlock().GenNext(t)
+	bc.Mutex.Unlock()
+	return res
 }
 
 // Fetch returns a blockchain fetching our received blockchain and other given blockchain. Does nothing
@@ -102,5 +109,8 @@ func (bc *Blockchain) Fetch(other *Blockchain) *Blockchain {
 
 // PoW returns true if Proof of Work is done for received blockchain and given difficulty.
 func (bc *Blockchain) PoW(difficulty int) bool {
-	return crypto.MatchHash(bc.GetLastBlock().ToHash(), difficulty)
+	bc.Mutex.Lock()
+	res := crypto.MatchHash(bc.GetLastBlock().ToHash(), difficulty)
+	bc.Mutex.Unlock()
+	return res
 }

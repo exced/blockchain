@@ -19,5 +19,5 @@ func (c *Consensus) UpdateNext() {
 // NewConsensus returns new consensus
 func NewConsensus() *Consensus {
 	hashRate := time.Duration(3) * time.Second // 10 minutes
-	return &Consensus{Next: time.Now().Add(hashRate), HashRate: hashRate, Difficulty: 4}
+	return &Consensus{Next: time.Now().Add(hashRate), HashRate: hashRate, Difficulty: 5}
 }

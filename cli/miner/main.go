@@ -10,19 +10,15 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"sync"
-
 	c "github.com/exced/blockchain/consensus"
 	"github.com/exced/blockchain/core"
 	"github.com/exced/blockchain/crypto"
 )
 
 var (
-	mutex        *sync.Mutex        // used to lock shared access via mining and P2P consensus handling
 	consensus    *c.Consensus       // consensus object
 	network      *c.Network         // network object
 	transactions *core.Transactions // pending transactions
-	block        *core.Block        // pending block. It will be linked to the blockchain when PoW done
 	blockchain   *core.Blockchain   // blockchain
 )
 
@@ -88,10 +84,6 @@ func main() {
 	// current working transactions
 	transactions = blockchain.GetLastBlock().Transactions
 
-	// current working block
-	mutex = &sync.Mutex{}
-	block = blockchain.GetLastBlock().GenNext(transactions)
-
 	// Serve HTTP
 	http.HandleFunc("/blockchain", handleBlockchain)
 	http.HandleFunc("/transaction", handleTransaction)
@@ -128,7 +120,7 @@ func handleTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("request: %#v", t.Transaction)
-	json.NewEncoder(w).Encode(block.Transactions.IsValid(t.Transaction))
+	json.NewEncoder(w).Encode(blockchain.GetLastBlock().Transactions.IsValid(t.Transaction))
 	transactions.Append(t.Transaction)
 	msg, _ := json.Marshal(t)
 	log.Println("Broadcast transaction to ", network)
@@ -183,23 +175,16 @@ func Mine(localKey string) {
 			blockchain.Mine()
 		}
 		// Present block
-		mutex.Lock()
-		msg, _ := json.Marshal(&c.BlockMessage{Block: block, From: localKey, Signature: false})
+		msg, _ := json.Marshal(&c.BlockMessage{Block: blockchain.GetLastBlock(), From: localKey, Signature: false})
 		network.Broadcast(c.Message{Type: c.Block, Message: msg})
 		// aggregate peers responses
 		responses := network.Aggregate()
 		// check validity
-		if network.Validate(block, responses) {
-			blockchain.AppendBlock(block)
-			msg, _ := json.Marshal(&c.BlockPoWMessage{Block: block, From: localKey, Signatures: responses})
+		if network.Validate(blockchain.GetLastBlock(), responses) {
+			blockchain.AppendBlock(blockchain.GetLastBlock())
+			msg, _ = json.Marshal(&c.BlockPoWMessage{Block: blockchain.GetLastBlock(), From: localKey, Signatures: responses})
 			network.Broadcast(c.Message{Type: c.BlockPoW, Message: msg})
 		}
-		blockchain.AppendBlock(block)
-		// update next tick
-		consensus.UpdateNext()
-		// work on "new clean" block: link + transactions history
-		block = blockchain.GenNext(transactions)
-		mutex.Unlock()
 	}
 }
 
@@ -236,16 +221,13 @@ func ListenAndServe(conn *websocket.Conn) {
 			log.Println("msg BlockPoW")
 			var blockPoWMsg *c.BlockPoWMessage
 			err = json.Unmarshal(msg.Message, &blockPoWMsg)
-			mutex.Lock()
-			blockchain.AppendBlock(blockPoWMsg.Block)
-			// update next tick
-			consensus.UpdateNext()
-			// reward
-			reward := core.NewTransaction(fmt.Sprintf("%v", blockPoWMsg.Signatures), blockPoWMsg.From, 1)
-			transactions.Append(reward)
-			// work on "new clean" block: link + transactions history
-			block = blockchain.GenNext(transactions)
-			mutex.Unlock()
+			// check validity
+			if network.Validate(blockPoWMsg.Block, blockPoWMsg.Signatures) {
+				blockchain.AppendBlock(blockPoWMsg.Block)
+				// reward
+				reward := core.NewTransaction(fmt.Sprintf("%v", blockPoWMsg.Signatures), blockPoWMsg.From, 1)
+				transactions.Append(reward)
+			}
 		}
 	}
 }
